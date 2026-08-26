@@ -1,0 +1,6 @@
+name = "movies-by-prosper-sasuu-og"
+main = "cloudflare-worker.js"
+compatibility_date = "2024-11-01"
+
+# After deploy, attach route in Cloudflare dashboard:
+#   yourdomain.com/movie/*

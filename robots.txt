@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /movie/
+Allow: /icons/
+Allow: /manifest.json
+Allow: /ads.txt
+Allow: /sitemap.xml
+
+Disallow: /edge/
+
+Sitemap: https://movies-by-prosper-sasuu.vercel.app/sitemap.xml
