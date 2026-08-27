@@ -95,7 +95,7 @@ function renderQuickResults(movies) {
       hSearchResults.hidden = true;
       hSearchInput.value = '';
       hSearchClear.hidden = true;
-      openDetails(m.id, m.title + (m.year ? ' ' + m.year : ''));
+      openDetails(m.id, m.title + (m.year ? ' ' + m.year : ''), m);
     };
     hSearchResults.appendChild(item);
   });
@@ -641,26 +641,44 @@ async function fetchMovies(page = 1, { allowCache = true } = {}) {
   return result;
 }
 
-async function fetchMovieDetails(id, { signal } = {}) {
+const MOVIE_DETAILS_TIMEOUT = 12000;
+
+async function fetchMovieDetails(id, { signal, rich = true } = {}) {
   const cached = cacheGet(id);
   if (cached) return cached;
-  const params = new URLSearchParams({ movie_id: id, with_images: true, with_cast: true });
-  const res = await fetch(`${API}/movie_details.json?${params}`, { signal });
-  if (!res.ok) throw new Error('API error');
-  const json = await res.json();
-  if (json.status !== 'ok') return null;
-  const movie = json.data.movie;
-  if (movie) cacheSet(id, movie);
-  return movie;
+
+  const params = new URLSearchParams({
+    movie_id: id,
+    with_images: rich ? 'true' : 'false',
+    with_cast: rich ? 'true' : 'false'
+  });
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), MOVIE_DETAILS_TIMEOUT);
+  const forwardAbort = () => controller.abort();
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', forwardAbort, { once: true });
+  }
+
+  try {
+    const res = await fetch(`${API}/movie_details.json?${params}`, { signal: controller.signal, cache: 'no-store' });
+    if (!res.ok) throw new Error(`API error (${res.status})`);
+    const json = await res.json();
+    if (json.status !== 'ok') return null;
+    const movie = json.data.movie;
+    if (movie && rich) cacheSet(id, movie);
+    return movie;
+  } finally {
+    clearTimeout(timeoutId);
+    if (signal) signal.removeEventListener('abort', forwardAbort);
+  }
 }
 
 function prefetchDetails(id) {
-  if (!id || cacheGet(id) || prefetchTimers.has(id)) return;
-  const t = setTimeout(() => {
-    prefetchTimers.delete(id);
-    fetchMovieDetails(id).catch(() => {});
-  }, 80);
-  prefetchTimers.set(id, t);
+  // Avoid firing a full movie-details request on hover/touch. The list response
+  // already contains the data needed to render the first screen instantly.
+  return;
 }
 
 function cancelPrefetch(id) {
@@ -690,7 +708,7 @@ function renderMovieCard(movie) {
     e.currentTarget.textContent = on ? '♥' : '♡';
     if (state.mode === 'watchlist') loadWatchlist();
   });
-  on(card, 'click', () => openDetails(movie.id, movie.title + (movie.year ? ' ' + movie.year : '')));
+  on(card, 'click', () => openDetails(movie.id, movie.title + (movie.year ? ' ' + movie.year : ''), movie));
     on(card, 'mouseenter', () => prefetchDetails(movie.id));
     on(card, 'mouseleave', () => cancelPrefetch(movie.id));
     on(card, 'touchstart', () => prefetchDetails(movie.id), { passive: true });
@@ -717,7 +735,7 @@ function setHero(movie) {
   `;
   const summary = movie.summary || movie.description_full || '';
   $('#heroSummary').textContent = summary.slice(0, 220) + (summary.length > 220 ? '…' : '');
-  $('#heroWatch').onclick = () => openDetails(movie.id, movie.title + (movie.year ? ' ' + movie.year : ''));
+  $('#heroWatch').onclick = () => openDetails(movie.id, movie.title + (movie.year ? ' ' + movie.year : ''), movie);
   const wlBtn = $('#heroWatchlist');
   const on = isInWatchlist(movie.id);
   wlBtn.textContent = on ? '♥ In Watchlist' : '❤ Watchlist';
@@ -889,7 +907,7 @@ function loadWatchlist() {
   updateUIState({ isInitial: false });
 }
 
-async function openDetails(id, title = null) {
+async function openDetails(id, title = null, seedMovie = null) {
   state.currentMovieId = id;
 
   const updateUrl = (movieTitle) => {
@@ -913,38 +931,60 @@ async function openDetails(id, title = null) {
 
   if (detailsAbort) { try { detailsAbort.abort(); } catch {} }
   detailsAbort = new AbortController();
+  const signal = detailsAbort.signal;
 
   const cached = cacheGet(id);
-  if (cached) {
+  const instantMovie = cached || seedMovie;
+
+  // Render immediately from the catalog/search result. This prevents the
+  // details page from showing a loading screen while the API is slow.
+  if (instantMovie) {
     $('#detailsLoading').hidden = true;
     $('#detailsContent').hidden = false;
-    updateUrl(cached.title + (cached.year ? ' ' + cached.year : ''));
-    renderDetails(cached);
-    addRecent(cached);
-    fetchMovieDetails(id).then(m => {
-      if (m && state.currentMovieId === id) {
-        cacheSet(id, m);
-        updateUrl(m.title + (m.year ? ' ' + m.year : ''));
-        renderDetails(m);
-      }
-    }).catch(() => {});
+    updateUrl(instantMovie.title + (instantMovie.year ? ' ' + instantMovie.year : ''));
+    renderDetails(instantMovie);
+    addRecent(instantMovie);
+
+    // Refresh with the richer response in the background. If the API is slow
+    // or unavailable, the already-rendered movie page remains usable.
+    if (!cached) {
+      fetchMovieDetails(id, { signal, rich: true }).then(m => {
+        if (m && state.currentMovieId === id) {
+          updateUrl(m.title + (m.year ? ' ' + m.year : ''));
+          renderDetails(m);
+          addRecent(m);
+        }
+      }).catch(err => {
+        if (err.name !== 'AbortError') console.warn('Background movie refresh failed:', err.message);
+      });
+    }
     return;
   }
 
   $('#detailsContent').hidden = true;
   $('#detailsLoading').hidden = false;
+  $('#detailsLoading').innerHTML = '<p>Loading movie details…</p><p style="font-size:.9rem;opacity:.7">The movie service is responding slowly. Please wait a moment.</p>';
 
   try {
-    const movie = await fetchMovieDetails(id, { signal: detailsAbort.signal });
+    // For direct movie URLs, request the small/basic response first. It is
+    // faster than waiting for images + cast before showing anything.
+    const movie = await fetchMovieDetails(id, { signal, rich: false });
     if (state.currentMovieId !== id) return;
     if (!movie) throw new Error('Not found');
     updateUrl(movie.title + (movie.year ? ' ' + movie.year : ''));
     renderDetails(movie);
     addRecent(movie);
+
+    // Then upgrade the page to the full response in the background.
+    fetchMovieDetails(id, { signal, rich: true }).then(m => {
+      if (m && state.currentMovieId === id) renderDetails(m);
+    }).catch(err => {
+      if (err.name !== 'AbortError') console.warn('Rich movie refresh failed:', err.message);
+    });
   } catch (e) {
     if (e.name === 'AbortError') return;
     console.error(e);
-    $('#detailsLoading').innerHTML = '<p style="color:#a0a0a0">Movie not found</p>';
+    $('#detailsLoading').innerHTML = '<p style="color:#777">Movie service is temporarily slow or unavailable.</p><button class="btn-primary" onclick="location.reload()">Try again</button>';
   }
 }
 
