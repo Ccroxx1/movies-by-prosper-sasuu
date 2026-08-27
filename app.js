@@ -21,7 +21,7 @@ const $ = (sel) => document.querySelector(sel);
 const movieGrid = $('#movieGrid');
 const loadingEl = $('#loading');
 const emptyEl = $('#empty');
-const loadMoreBtn = $('#loadMore');
+const paginationEl = $('#pagination');
 const searchInput = $('#searchInput');
 const homeView = $('#homeView');
 const detailsView = $('#detailsView');
@@ -102,7 +102,7 @@ function renderRecent() {
       <img src="${fixImageUrl(m.medium_cover_image)}" alt="" loading="lazy" onerror="this.style.opacity=0.3" />
       <div class="card-title">${escapeHtml(m.title)}</div>
     `;
-    card.addEventListener('click', () => openDetails(m.id));
+    card.addEventListener('click', () => openDetails(m.id, m.title + (m.year ? ' ' + m.year : '')));
     strip.appendChild(card);
   });
   if (strip) { strip.dataset.swipeBound = ''; bindStripSwipe('.recent-strip'); }
@@ -218,9 +218,14 @@ function showGenresHub() {
   if (hero) hero.hidden = true;
   const recent = $('#recentSection');
   if (recent) recent.hidden = true;
+  const about = $('#about-site');
+  if (about) about.hidden = true;
+  const adTop = $('#adTop');
+  if (adTop) adTop.hidden = true;
   emptyEl.hidden = true;
   loadingEl.hidden = true;
-  loadMoreBtn.hidden = true;
+  const pgWrap = $('.pagination-wrap');
+  if (pgWrap) pgWrap.hidden = true;
 }
 
 
@@ -256,6 +261,16 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str || '';
   return div.innerHTML;
+}
+
+function slugify(text) {
+  if (!text) return '';
+  return text.toString().toLowerCase().trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w\-]+/g, '')
+    .replace(/\-\-+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
 }
 
 
@@ -469,7 +484,7 @@ function cacheSet(id, data) {
 }
 
 async function fetchMovies(page = 1) {
-  const params = new URLSearchParams({ page, limit: 24 });
+  const params = new URLSearchParams({ page, limit: 20 });
   if (state.query.trim()) params.set('query_term', state.query.trim());
   if (state.quality) params.set('quality', state.quality);
   if (state.genre) params.set('genre', state.genre);
@@ -531,7 +546,7 @@ function renderMovieCard(movie) {
       <button class="card-watch ${watched ? 'on' : ''}" title="Watchlist" aria-label="Watchlist">${watched ? '♥' : '♡'}</button>
       <img class="poster-img" src="${imgUrl}" alt="${escapeHtml(movie.title)}" loading="lazy" onerror="this.style.opacity='0.25'" />
       <div class="rating-badge">${stars(movie.rating)}</div>
-      <div class="poster-overlay"><span>View</span></div>
+      <div class="poster-overlay"></div>
     </div>
     <div class="card-title">${escapeHtml(movie.title)}</div>
     <div class="card-year">${movie.year}</div>
@@ -543,7 +558,7 @@ function renderMovieCard(movie) {
     e.currentTarget.textContent = on ? '♥' : '♡';
     if (state.mode === 'watchlist') loadWatchlist();
   });
-  card.addEventListener('click', () => openDetails(movie.id));
+  card.addEventListener('click', () => openDetails(movie.id, movie.title + (movie.year ? ' ' + movie.year : '')));
   card.addEventListener('mouseenter', () => prefetchDetails(movie.id));
   card.addEventListener('mouseleave', () => cancelPrefetch(movie.id));
   card.addEventListener('touchstart', () => prefetchDetails(movie.id), { passive: true });
@@ -570,7 +585,7 @@ function setHero(movie) {
   `;
   const summary = movie.summary || movie.description_full || '';
   $('#heroSummary').textContent = summary.slice(0, 220) + (summary.length > 220 ? '…' : '');
-  $('#heroWatch').onclick = () => openDetails(movie.id);
+  $('#heroWatch').onclick = () => openDetails(movie.id, movie.title + (movie.year ? ' ' + movie.year : ''));
   const wlBtn = $('#heroWatchlist');
   const on = isInWatchlist(movie.id);
   wlBtn.textContent = on ? '♥ In Watchlist' : '❤ Watchlist';
@@ -616,43 +631,46 @@ function updateUIState({ isInitial = false, error = false } = {}) {
       : 'No movies found for these filters.';
     clearBtn.hidden = state.mode === 'watchlist';
   }
-  loadMoreBtn.hidden = state.loading || !state.hasMore || !hasMovies || state.mode === 'watchlist';
-  loadMoreBtn.disabled = state.loading;
-  loadMoreBtn.textContent = state.loading ? 'Loading…' : 'Load More';
+  const pgWrap = $('.pagination-wrap');
+  if (pgWrap) pgWrap.hidden = state.loading || !hasMovies || state.mode === 'watchlist' || state.total <= 20;
+
   $('#resultsCount').textContent = state.mode === 'watchlist'
     ? `${state.movies.length} saved`
     : (state.total ? `${state.total.toLocaleString()} movies` : '');
 }
 
-async function loadMovies(reset = false) {
+async function loadMovies(reset = false, targetPage = null) {
   const hub = $('#genresHub');
   const moviesSec = $('#moviesSection');
   if (hub) hub.hidden = true;
   if (moviesSec) moviesSec.hidden = false;
   if (state.mode === 'watchlist') return loadWatchlist();
   if (state.loading) return;
-  if (reset) {
+
+  if (targetPage !== null) {
+    state.page = targetPage;
+  } else if (reset) {
     state.page = 1;
-    state.movies = [];
-    state.hasMore = true;
   }
-  if (!state.hasMore && !reset) return;
 
   state.loading = true;
-  const isInitial = reset || state.movies.length === 0;
+  const isInitial = reset || targetPage !== null || state.movies.length === 0;
   updateUIState({ isInitial });
-  if (reset) movieGrid.innerHTML = '';
+
+  // For numbered pagination, always clear grid
+  movieGrid.innerHTML = '';
+  window.scrollTo({ top: 0, behavior: reset ? 'auto' : 'smooth' });
 
   try {
     const { movies, total } = await fetchMovies(state.page);
-    state.movies = reset ? movies : [...state.movies, ...movies];
+    state.movies = movies;
     state.total = total;
-    state.hasMore = movies.length >= 20;
-    state.page += 1;
-    renderGrid(movies, !reset);
+    state.hasMore = total > state.page * 20;
+    renderGrid(movies, false);
+    renderPagination();
     updateSectionHeader();
     renderRecent();
-    if (reset) setHero(movies.length > 0 ? movies[0] : null);
+    if (reset || (targetPage === 1)) setHero(movies.length > 0 ? movies[0] : null);
   } catch (err) {
     console.error(err);
     updateUIState({ isInitial, error: true });
@@ -663,11 +681,58 @@ async function loadMovies(reset = false) {
   }
 }
 
+function renderPagination() {
+  if (!paginationEl) return;
+  paginationEl.innerHTML = '';
+  if (state.total <= 20 || state.mode === 'watchlist') return;
+
+  const totalPages = Math.ceil(state.total / 20);
+  const current = state.page;
+  const delta = window.innerWidth < 600 ? 1 : 2;
+  const range = [];
+
+  for (let i = Math.max(2, current - delta); i <= Math.min(totalPages - 1, current + delta); i++) {
+    range.push(i);
+  }
+
+  if (current - delta > 2) range.unshift('...');
+  range.unshift(1);
+  if (current + delta < totalPages - 1) range.push('...');
+  range.push(totalPages);
+
+  range.forEach(p => {
+    if (p === '...') {
+      const span = document.createElement('span');
+      span.className = 'page-btn dots';
+      span.textContent = '...';
+      paginationEl.appendChild(span);
+    } else {
+      const btn = document.createElement('button');
+      btn.className = `page-btn ${p === current ? 'active' : ''}`;
+      btn.textContent = p;
+      btn.addEventListener('click', () => loadMovies(false, p));
+      paginationEl.appendChild(btn);
+    }
+  });
+
+  if (current < totalPages) {
+    const next = document.createElement('button');
+    next.className = 'page-btn next-btn';
+    next.innerHTML = 'Next &raquo;';
+    next.addEventListener('click', () => loadMovies(false, current + 1));
+    paginationEl.appendChild(next);
+  }
+}
+
 function loadWatchlist() {
   state.mode = 'watchlist';
   state.loading = false;
   hero.hidden = true;
   $('#recentSection').hidden = true;
+  const about = $('#about-site');
+  if (about) about.hidden = true;
+  const adTop = $('#adTop');
+  if (adTop) adTop.hidden = true;
   const list = getWatchlist();
   state.movies = list;
   state.hasMore = false;
@@ -677,19 +742,24 @@ function loadWatchlist() {
   updateUIState({ isInitial: false });
 }
 
-async function openDetails(id) {
+async function openDetails(id, title = null) {
   state.currentMovieId = id;
-  // Canonical deep link for edge OG + shares
-  const target = `/movie/${id}`;
-  try {
-    if (location.pathname !== target) {
-      history.pushState({ movieId: id }, '', target);
-    } else {
-      history.replaceState({ movieId: id }, '', target);
+
+  const updateUrl = (movieTitle) => {
+    const slug = movieTitle ? '/' + slugify(movieTitle) : '';
+    const target = `/movie/${id}${slug}`;
+    try {
+      if (location.pathname !== target) {
+        history.pushState({ movieId: id }, '', target);
+      } else {
+        history.replaceState({ movieId: id }, '', target);
+      }
+    } catch (_) {
+      window.location.hash = `movie/${id}${slug}`;
     }
-  } catch (_) {
-    window.location.hash = `movie/${id}`;
-  }
+  };
+
+  updateUrl(title);
   homeView.hidden = true;
   detailsView.hidden = false;
   window.scrollTo(0, 0);
@@ -701,10 +771,15 @@ async function openDetails(id) {
   if (cached) {
     $('#detailsLoading').hidden = true;
     $('#detailsContent').hidden = false;
+    updateUrl(cached.title + (cached.year ? ' ' + cached.year : ''));
     renderDetails(cached);
     addRecent(cached);
     fetchMovieDetails(id).then(m => {
-      if (m && state.currentMovieId === id) { cacheSet(id, m); renderDetails(m); }
+      if (m && state.currentMovieId === id) {
+        cacheSet(id, m);
+        updateUrl(m.title + (m.year ? ' ' + m.year : ''));
+        renderDetails(m);
+      }
     }).catch(() => {});
     return;
   }
@@ -716,6 +791,7 @@ async function openDetails(id) {
     const movie = await fetchMovieDetails(id, { signal: detailsAbort.signal });
     if (state.currentMovieId !== id) return;
     if (!movie) throw new Error('Not found');
+    updateUrl(movie.title + (movie.year ? ' ' + movie.year : ''));
     renderDetails(movie);
     addRecent(movie);
   } catch (e) {
@@ -1016,10 +1092,18 @@ function openTrailer(code, title) {
 }
 
 function parseMovieIdFromLocation() {
-  // 1) /movie/123
-  const pathMatch = location.pathname.match(/\/movie\/(\d+)\/?$/);
+  // 1) Handle SPA redirect from 404.html (e.g. /?/movie/123/slug)
+  const search = location.search;
+  if (search.startsWith('?/')) {
+    const redirectPath = search.slice(1);
+    const m = redirectPath.match(/\/movie\/(\d+)(?:\/.*)?$/);
+    if (m) return parseInt(m[1], 10);
+  }
+
+  // 2) /movie/123/slug
+  const pathMatch = location.pathname.match(/\/movie\/(\d+)(?:\/.*)?$/);
   if (pathMatch) return parseInt(pathMatch[1], 10);
-  // 2) ?movie=123
+  // 3) ?movie=123
   const q = new URLSearchParams(location.search).get('movie');
   if (q && /^\d+$/.test(q)) return parseInt(q, 10);
   // 3) #movie/123
@@ -1035,7 +1119,7 @@ function closeDetails() {
   clearMovieStructuredData();
   state.currentMovieId = null;
   try {
-    history.pushState({}, '', location.pathname.replace(/\/movie\/\d+\/?$/, '/') || '/');
+    history.pushState({}, '', location.pathname.replace(/\/movie\/\d+(?:\/.*)?$/, '/') || '/');
   } catch (_) {
     window.location.hash = '';
   }
@@ -1045,17 +1129,23 @@ function closeDetails() {
   detailsView.hidden = true;
   homeView.hidden = false;
   window.scrollTo(0, 0);
+  if (state.movies.length === 0) loadMovies(true);
 }
 
 function handleRoute() {
   const id = parseMovieIdFromLocation();
   if (id != null) {
     if (id !== state.currentMovieId) openDetails(id);
-  } else if (state.currentMovieId) {
-    // left movie URL
-    state.currentMovieId = null;
-    detailsView.hidden = true;
-    homeView.hidden = false;
+  } else {
+    if (state.currentMovieId) {
+      // left movie URL
+      state.currentMovieId = null;
+      detailsView.hidden = true;
+      homeView.hidden = false;
+    }
+    if (state.movies.length === 0 && !state.loading) {
+      loadMovies(true);
+    }
   }
 }
 
@@ -1097,7 +1187,6 @@ searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFil
 ['filterQuality','filterGenre','filterRating','filterYear','filterLanguage','filterOrder'].forEach(id => {
   $(`#${id}`).addEventListener('change', applyFiltersAndSearch);
 });
-loadMoreBtn.addEventListener('click', () => loadMovies(false));
 $('#backBtn').addEventListener('click', closeDetails);
 $('#clearFiltersBtn').addEventListener('click', clearFilters);
 $('#clearRecent').addEventListener('click', () => {
@@ -1166,7 +1255,8 @@ document.querySelectorAll('.nav-item').forEach(item => {
   });
 });
 
-// Infinite scroll
+// Infinite scroll disabled in favor of numbered pagination
+/*
 const sentinel = $('#scrollSentinel');
 if (sentinel && 'IntersectionObserver' in window) {
   new IntersectionObserver((entries) => {
@@ -1175,6 +1265,7 @@ if (sentinel && 'IntersectionObserver' in window) {
     }
   }, { rootMargin: '400px' }).observe(sentinel);
 }
+*/
 
 // Theme
 function applyTheme(theme) {
@@ -1531,7 +1622,7 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape' && sideMenu && sideMenu.classList.contains('is-open')) closeMenu();
 });
 window.addEventListener('resize', function() {
-  if (window.innerWidth > 1100) closeMenu();
+  if (window.innerWidth > 960) closeMenu();
 });
 
 document.querySelectorAll('.side-menu-item[data-view]').forEach(function(el) {

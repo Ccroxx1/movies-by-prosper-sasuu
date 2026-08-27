@@ -36,7 +36,7 @@
   <meta property="og:title" content="Movies By Prosper Sasuu" />
   <meta property="og:description" content="Browse HD &amp; 4K movies free. Filter by genre, rating &amp; year. Trailers, cast &amp; watchlist on Movies By Prosper Sasuu." id="ogDescription" />
   <meta property="og:url" content="/" />
-  <meta property="og:image" content="icons/logo-full.png" />
+  <meta property="og:image" content="/icons/logo-full.png" />
   <meta property="og:image:type" content="image/png" />
   <meta property="og:image:alt" content="Movies By Prosper Sasuu logo" />
 
@@ -44,24 +44,24 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Movies By Prosper Sasuu" />
   <meta name="twitter:description" content="Browse HD &amp; 4K movies free. Filter by genre, rating &amp; year. Trailers, cast &amp; watchlist on Movies By Prosper Sasuu." id="twDescription" />
-  <meta name="twitter:image" content="icons/logo-full.png" />
+  <meta name="twitter:image" content="/icons/logo-full.png" />
 
   <!-- Icons -->
-  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml" />
-  <link rel="icon" href="icons/favicon.ico" sizes="any" />
-  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png" />
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="mask-icon" href="icons/favicon.svg" color="#e50914" />
-  <link rel="manifest" href="manifest.json" />
-  <link rel="canonical" href="./" />
-  <link rel="sitemap" type="application/xml" title="Sitemap" href="sitemap.xml" />
+  <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="mask-icon" href="/icons/favicon.svg" color="#e50914" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="canonical" href="/" />
+  <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="dns-prefetch" href="https://movies-api.accel.li" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=Bebas+Neue&amp;display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="/styles.css" />
 
   <!-- Google AdSense -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6128111645137702" crossorigin="anonymous"></script>
@@ -166,7 +166,7 @@
   <header class="header" id="header">
     <div class="header-inner">
       <a href="#" class="logo" id="logo" title="Movies By Prosper Sasuu">
-        <img class="logo-img" src="icons/logo-header.png" alt="Movies By Prosper Sasuu" width="192" height="80" />
+        <img class="logo-img" src="/icons/logo-header.png" alt="Movies By Prosper Sasuu" width="192" height="80" />
       </a>
       <button type="button" class="menu-toggle" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="sideMenu">
         <span></span><span></span><span></span>
@@ -190,7 +190,7 @@
   <div class="menu-backdrop" id="menuBackdrop" hidden></div>
   <aside class="side-menu" id="sideMenu" hidden aria-hidden="true" aria-label="Site menu">
     <div class="side-menu-header">
-      <img src="icons/logo-header.png" alt="Movies By Prosper Sasuu" class="side-menu-logo" width="160" height="56" />
+      <img src="/icons/logo-header.png" alt="Movies By Prosper Sasuu" class="side-menu-logo" width="160" height="56" />
       <button type="button" class="side-menu-close" id="menuClose" aria-label="Close menu">&times;</button>
     </div>
     <nav class="side-menu-nav">
@@ -215,111 +215,111 @@
   </aside>
 
 
-  <div class="search-panel">
-    <div class="search-panel-inner">
-      <div class="search-row">
-        <div class="search-field">
-          <label>Search movies <kbd>/</kbd></label>
-          <div class="search-input-wrap">
-            <input type="text" id="searchInput" placeholder="Search movie title, IMDb code, actor, director..." autocomplete="off" />
-            <button id="searchBtn" class="btn-search"><svg class="btn-ico" aria-hidden="true"><use href="#i-search"/></svg> Search</button>
-          </div>
-        </div>
-      </div>
-      <div class="filters-row">
-        <div class="filter-group">
-          <label>Quality</label>
-          <select id="filterQuality">
-            <option value="">All</option>
-            <option value="720p">720p</option>
-            <option value="1080p">1080p</option>
-            <option value="2160p">4K / 2160p</option>
-            <option value="3D">3D</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label>Genre</label>
-          <select id="filterGenre">
-            <option value="">All</option>
-            <option>Action</option><option>Adventure</option><option>Animation</option>
-            <option>Comedy</option><option>Crime</option><option>Documentary</option>
-            <option>Drama</option><option>Family</option><option>Fantasy</option>
-            <option>Horror</option><option>Mystery</option><option>Romance</option>
-            <option>Sci-Fi</option><option>Thriller</option><option>War</option><option>Western</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label>Rating</label>
-          <select id="filterRating">
-            <option value="">All</option>
-            <option value="9">9+</option><option value="8">8+</option>
-            <option value="7">7+</option><option value="6">6+</option><option value="5">5+</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label>Year</label>
-          <select id="filterYear"><option value="">All</option></select>
-        </div>
-        <div class="filter-group">
-          <label>Language</label>
-          <select id="filterLanguage">
-            <option value="">All</option>
-            <option value="en">English</option>
-            <option value="fr">French</option>
-            <option value="es">Spanish</option>
-            <option value="de">German</option>
-            <option value="it">Italian</option>
-            <option value="ja">Japanese</option>
-            <option value="ko">Korean</option>
-            <option value="zh">Chinese</option>
-            <option value="hi">Hindi</option>
-            <option value="pt">Portuguese</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label>Order By</label>
-          <select id="filterOrder">
-            <option value="latest">Latest</option>
-            <option value="seeds">Most Seeds</option>
-            <option value="rating">Highest Rated</option>
-            <option value="year">Year</option>
-            <option value="title">Title A–Z</option>
-            <option value="download_count">Most Downloaded</option>
-          </select>
-        </div>
-      </div>
-      <div class="genre-chips swipe-strip" id="genreChips"></div>
-    </div>
-  </div>
-
   <main id="app">
 
-  <!-- Crawlable site summary for search engines -->
-  <section class="seo-summary" id="about-site" aria-label="About this site">
-    <h1 class="seo-title">Movies By Prosper Sasuu</h1>
-    <p>
-      Movies By Prosper Sasuu is a free movie discovery platform. Browse thousands of titles,
-      filter by quality, genre, rating, year and language, and find magnet links and torrent files
-      from public indexes. We provide metadata only and do not host video files.
-    </p>
-    <h2 class="seo-sub">Browse movies online</h2>
-    <p>
-      Explore <a href="#/" data-page="browse">latest releases</a>,
-      <a href="#/" data-page="trending">trending movies</a>,
-      <a href="#/" data-page="4k">4K UHD</a>,
-      and <a href="#/" data-page="top">top rated</a> films.
-      Read our <a href="#" data-modal="privacy">Privacy Policy</a>,
-      <a href="#" data-modal="terms">Terms of Service</a>,
-      and <a href="#" data-modal="contact">Contact</a> information.
-    </p>
-  </section>
-
-    <aside class="ad-slot ad-slot-top" id="adTop" aria-label="Advertisement">
-      <div class="ad-label">Ad</div>
-      <div class="ad-container" data-ad-pos="top"></div>
-    </aside>
-
     <section id="homeView">
+      <div class="search-panel">
+        <div class="search-panel-inner">
+          <div class="search-row">
+            <div class="search-field">
+              <label>Search movies <kbd>/</kbd></label>
+              <div class="search-input-wrap">
+                <input type="text" id="searchInput" placeholder="Search movie title, IMDb code, actor, director..." autocomplete="off" />
+                <button id="searchBtn" class="btn-search"><svg class="btn-ico" aria-hidden="true"><use href="#i-search"/></svg> Search</button>
+              </div>
+            </div>
+          </div>
+          <div class="filters-row">
+            <div class="filter-group">
+              <label>Quality</label>
+              <select id="filterQuality">
+                <option value="">All</option>
+                <option value="720p">720p</option>
+                <option value="1080p">1080p</option>
+                <option value="2160p">4K / 2160p</option>
+                <option value="3D">3D</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label>Genre</label>
+              <select id="filterGenre">
+                <option value="">All</option>
+                <option>Action</option><option>Adventure</option><option>Animation</option>
+                <option>Comedy</option><option>Crime</option><option>Documentary</option>
+                <option>Drama</option><option>Family</option><option>Fantasy</option>
+                <option>Horror</option><option>Mystery</option><option>Romance</option>
+                <option>Sci-Fi</option><option>Thriller</option><option>War</option><option>Western</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label>Rating</label>
+              <select id="filterRating">
+                <option value="">All</option>
+                <option value="9">9+</option><option value="8">8+</option>
+                <option value="7">7+</option><option value="6">6+</option><option value="5">5+</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label>Year</label>
+              <select id="filterYear"><option value="">All</option></select>
+            </div>
+            <div class="filter-group">
+              <label>Language</label>
+              <select id="filterLanguage">
+                <option value="">All</option>
+                <option value="en">English</option>
+                <option value="fr">French</option>
+                <option value="es">Spanish</option>
+                <option value="de">German</option>
+                <option value="it">Italian</option>
+                <option value="ja">Japanese</option>
+                <option value="ko">Korean</option>
+                <option value="zh">Chinese</option>
+                <option value="hi">Hindi</option>
+                <option value="pt">Portuguese</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label>Order By</label>
+              <select id="filterOrder">
+                <option value="latest">Latest</option>
+                <option value="seeds">Most Seeds</option>
+                <option value="rating">Highest Rated</option>
+                <option value="year">Year</option>
+                <option value="title">Title A–Z</option>
+                <option value="download_count">Most Downloaded</option>
+              </select>
+            </div>
+          </div>
+          <div class="genre-chips swipe-strip" id="genreChips"></div>
+        </div>
+      </div>
+
+      <!-- Crawlable site summary for search engines -->
+      <section class="seo-summary" id="about-site" aria-label="About this site">
+        <h1 class="seo-title">Movies By Prosper Sasuu</h1>
+        <p>
+          Movies By Prosper Sasuu is a free movie discovery platform. Browse thousands of titles,
+          filter by quality, genre, rating, year and language, and find magnet links and torrent files
+          from public indexes. We provide metadata only and do not host video files.
+        </p>
+        <h2 class="seo-sub">Browse movies online</h2>
+        <p>
+          Explore <a href="#/" data-page="browse">latest releases</a>,
+          <a href="#/" data-page="trending">trending movies</a>,
+          <a href="#/" data-page="4k">4K UHD</a>,
+          and <a href="#/" data-page="top">top rated</a> films.
+          Read our <a href="#" data-modal="privacy">Privacy Policy</a>,
+          <a href="#" data-modal="terms">Terms of Service</a>,
+          and <a href="#" data-modal="contact">Contact</a> information.
+        </p>
+      </section>
+
+      <aside class="ad-slot ad-slot-top" id="adTop" aria-label="Advertisement">
+        <div class="ad-label">Ad</div>
+        <div class="ad-container" data-ad-pos="top"></div>
+      </aside>
+
       <div class="hero" id="hero" hidden>
         <div class="hero-bg" id="heroBg"></div>
         <div class="hero-overlay"></div>
@@ -374,9 +374,8 @@
           <div class="results-count" id="resultsCount"></div>
         </div>
         <div class="movie-grid" id="movieGrid"></div>
-        <div class="load-more-wrap">
-          <div id="scrollSentinel" class="scroll-sentinel"></div>
-          <button class="btn-secondary" id="loadMore" hidden>Load More</button>
+        <div class="pagination-wrap">
+          <div class="pagination" id="pagination"></div>
         </div>
         <div class="loading" id="loading" hidden>
           <div class="spinner"></div>
@@ -467,7 +466,7 @@
     <div class="footer-grid">
       <div class="footer-col brand-col">
         <div class="footer-brand">
-          <img class="footer-logo-img" src="icons/icon-64.png" alt="" width="40" height="40" />
+          <img class="footer-logo-img" src="/icons/icon-64.png" alt="" width="40" height="40" />
           <div>
             <div class="footer-logo">MOVIES <span>BY PROSPER SASUU</span></div>
             <div class="footer-tagline">Your personal movie vault</div>
@@ -526,10 +525,10 @@
 
   <div class="toast" id="toast" hidden></div>
 
-  <script src="app.js"></script>
+  <script src="/app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
   </script>
 </body>

@@ -29,7 +29,7 @@ function fixImage(url: string) {
 
 export default async (request: Request, context: Context) => {
   const url = new URL(request.url);
-  const m = url.pathname.match(/^\/movie\/(\d+)\/?$/);
+  const m = url.pathname.match(/^\/movie\/(\d+)(?:\/.*)?$/);
   if (!m) return context.next();
 
   const ua = request.headers.get("user-agent") || "";

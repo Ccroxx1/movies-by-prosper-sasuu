@@ -87,7 +87,7 @@ function ogHtml(movie, canonical) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const match = url.pathname.match(/^\/movie\/(\d+)\/?$/);
+    const match = url.pathname.match(/^\/movie\/(\d+)(?:\/.*)?$/);
     if (!match) {
       // Optional: SPA fallback if this worker is on /* 
       return fetch(request);
