@@ -22,7 +22,8 @@ const state = {
   hasMore: true,
   currentMovieId: null,
   total: 0,
-  mode: 'browse' // browse | watchlist
+  mode: 'browse', // browse | watchlist
+  pageSize: window.matchMedia('(max-width: 600px)').matches ? 16 : 20
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -101,6 +102,19 @@ function renderQuickResults(movies) {
 }
 
 on(hSearchInput, 'input', debounce((e) => quickSearch(e.target.value), 300));
+on(hSearchInput, 'keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const value = hSearchInput.value.trim();
+    if (!value) return;
+    hSearchResults.hidden = true;
+    hSearchClear.hidden = true;
+    if (typeof applyFiltersAndSearch === 'function') {
+      searchInput.value = value;
+      applyFiltersAndSearch();
+    }
+  }
+});
 on(hSearchClear, 'click', () => {
   hSearchInput.value = '';
   hSearchResults.hidden = true;
@@ -571,8 +585,36 @@ function cacheSet(id, data) {
   try { sessionStorage.setItem('mbps_movie_' + id, JSON.stringify(entry)); } catch {}
 }
 
-async function fetchMovies(page = 1) {
-  const params = new URLSearchParams({ page, limit: 20 });
+const MOVIE_LIST_CACHE_TTL = 5 * 60 * 1000;
+
+function movieListCacheKey(page) {
+  return 'mbps_movies_' + btoa(unescape(encodeURIComponent(JSON.stringify({
+    page, pageSize: state.pageSize, query: state.query.trim(), quality: state.quality,
+    genre: state.genre, rating: state.rating, year: state.year, language: state.language, sort: state.sort
+  })))).replace(/=+$/,'');
+}
+
+function getMovieListCache(page) {
+  try {
+    const raw = localStorage.getItem(movieListCacheKey(page));
+    if (!raw) return null;
+    const item = JSON.parse(raw);
+    if (!item || Date.now() - item.ts > MOVIE_LIST_CACHE_TTL) return null;
+    return item.data;
+  } catch { return null; }
+}
+
+function setMovieListCache(page, data) {
+  try {
+    localStorage.setItem(movieListCacheKey(page), JSON.stringify({ ts: Date.now(), data }));
+  } catch {}
+}
+
+async function fetchMovies(page = 1, { allowCache = true } = {}) {
+  const cached = allowCache ? getMovieListCache(page) : null;
+  if (cached) return cached;
+
+  const params = new URLSearchParams({ page, limit: state.pageSize });
   if (state.query.trim()) params.set('query_term', state.query.trim());
   if (state.quality) params.set('quality', state.quality);
   if (state.genre) params.set('genre', state.genre);
@@ -588,13 +630,15 @@ async function fetchMovies(page = 1) {
   params.set('sort_by', sort.sort_by);
   params.set('order_by', sort.order_by);
 
-  const res = await fetch(`${API}/list_movies.json?${params}`);
+  const res = await fetch(`${API}/list_movies.json?${params}`, { cache: 'force-cache' });
   if (!res.ok) throw new Error('API error');
   const json = await res.json();
   if (json.status !== 'ok') return { movies: [], total: 0 };
   let movies = json.data.movies || [];
   if (state.year) movies = movies.filter(m => String(m.year) === String(state.year));
-  return { movies, total: json.data.movie_count || 0 };
+  const result = { movies, total: json.data.movie_count || 0 };
+  setMovieListCache(page, result);
+  return result;
 }
 
 async function fetchMovieDetails(id, { signal } = {}) {
@@ -632,7 +676,7 @@ function renderMovieCard(movie) {
   card.innerHTML = `
     <div class="poster-wrap">
       <button class="card-watch ${watched ? 'on' : ''}" title="Watchlist" aria-label="Watchlist">${watched ? '♥' : '♡'}</button>
-      <img class="poster-img" src="${imgUrl}" alt="${escapeHtml(movie.title)}" loading="lazy" onerror="this.style.opacity='0.25'" />
+      <img class="poster-img" src="${imgUrl}" alt="${escapeHtml(movie.title)}" loading="${state.movies.indexOf(movie) < 4 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${state.movies.indexOf(movie) < 2 ? 'high' : 'auto'}" onerror="this.style.opacity='0.25'" />
       <div class="rating-badge">${stars(movie.rating)}</div>
       <div class="poster-overlay"></div>
     </div>
@@ -720,7 +764,7 @@ function updateUIState({ isInitial = false, error = false } = {}) {
     clearBtn.hidden = state.mode === 'watchlist';
   }
   const pgWrap = $('.pagination-wrap');
-  if (pgWrap) pgWrap.hidden = state.loading || !hasMovies || state.mode === 'watchlist' || state.total <= 20;
+  if (pgWrap) pgWrap.hidden = state.loading || !hasMovies || state.mode === 'watchlist' || state.total <= state.pageSize;
 
   $('#resultsCount').textContent = state.mode === 'watchlist'
     ? `${state.movies.length} saved`
@@ -750,15 +794,30 @@ async function loadMovies(reset = false, targetPage = null) {
   window.scrollTo({ top: 0, behavior: reset ? 'auto' : 'smooth' });
 
   try {
-    const { movies, total } = await fetchMovies(state.page);
+    const cached = getMovieListCache(state.page);
+    const result = await fetchMovies(state.page);
+    const { movies, total } = result;
     state.movies = movies;
     state.total = total;
-    state.hasMore = total > state.page * 20;
+    state.hasMore = total > state.page * state.pageSize;
     renderGrid(movies, false);
     renderPagination();
     updateSectionHeader();
     renderRecent();
     if (reset || (targetPage === 1)) setHero(movies.length > 0 ? movies[0] : null);
+
+    // Refresh cached catalog data quietly so repeat visits feel instant while staying fresh.
+    if (cached) {
+      fetchMovies(state.page, { allowCache: false }).then(fresh => {
+        if (state.page === (targetPage !== null ? targetPage : state.page) && fresh.movies?.length) {
+          state.movies = fresh.movies;
+          state.total = fresh.total;
+          renderGrid(fresh.movies, false);
+          renderPagination();
+          updateUIState({ isInitial: false });
+        }
+      }).catch(() => {});
+    }
   } catch (err) {
     console.error(err);
     updateUIState({ isInitial, error: true });
@@ -772,9 +831,9 @@ async function loadMovies(reset = false, targetPage = null) {
 function renderPagination() {
   if (!paginationEl) return;
   paginationEl.innerHTML = '';
-  if (state.total <= 20 || state.mode === 'watchlist') return;
+  if (state.total <= state.pageSize || state.mode === 'watchlist') return;
 
-  const totalPages = Math.ceil(state.total / 20);
+  const totalPages = Math.ceil(state.total / state.pageSize);
   const current = state.page;
   const delta = window.innerWidth < 600 ? 1 : 2;
   const range = [];
@@ -1238,6 +1297,7 @@ function handleRoute() {
 }
 
 function applyFiltersAndSearch() {
+  state.pageSize = window.matchMedia('(max-width: 600px)').matches ? 16 : 20;
   state.mode = 'browse';
   state.query = searchInput.value.trim();
   state.quality = $('#filterQuality').value;

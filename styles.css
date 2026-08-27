@@ -2385,3 +2385,450 @@ body.light .side-menu-footer { border-top-color: rgba(0,0,0,0.08); }
 body.menu-open {
   overflow: hidden;
 }
+
+/* ===== FINAL RESPONSIVE HEADER / QUICK SEARCH FIX ===== */
+/* These rules intentionally live at the end so they win over earlier responsive rules. */
+.header-inner {
+  min-width: 0;
+}
+
+.header-search {
+  position: relative !important;
+  display: block !important;
+  flex: 1 1 360px !important;
+  width: min(400px, 100%) !important;
+  max-width: 400px !important;
+  min-width: 160px !important;
+  margin: 0 4px !important;
+  z-index: 310;
+}
+
+.h-search-wrap {
+  width: 100% !important;
+  height: 38px !important;
+}
+
+.h-search-ico {
+  position: absolute !important;
+  left: 13px !important;
+  top: 50% !important;
+  width: 17px !important;
+  height: 17px !important;
+  min-width: 17px !important;
+  min-height: 17px !important;
+  max-width: 17px !important;
+  max-height: 17px !important;
+  transform: translateY(-50%) !important;
+  display: block !important;
+  pointer-events: none !important;
+  color: var(--text-dim) !important;
+}
+
+#headerSearchInput {
+  display: block !important;
+  width: 100% !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  margin: 0 !important;
+  padding: 0 38px 0 40px !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  box-shadow: none;
+}
+
+#headerSearchInput::placeholder {
+  color: var(--text-dim);
+  opacity: 1;
+}
+
+.h-search-clear {
+  top: 50% !important;
+  right: 8px !important;
+  transform: translateY(-50%) !important;
+}
+
+.h-search-results {
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+}
+
+/* Keep the desktop header balanced when the viewport becomes narrower. */
+@media (max-width: 1200px) and (min-width: 961px) {
+  .header-inner { gap: 12px; padding: 0 16px; }
+  .nav-links { flex: 0 1 auto; min-width: 0; }
+  .nav-item { padding-left: 8px; padding-right: 8px; }
+  .header-search {
+    flex: 1 1 240px !important;
+    max-width: 320px !important;
+    min-width: 180px !important;
+  }
+}
+
+/* Tablet: use the hamburger menu and give search its own full-width row. */
+@media (max-width: 960px) {
+  .header {
+    height: var(--header-h);
+  }
+  .header-inner {
+    gap: 8px;
+    padding: 0 12px;
+  }
+  .logo {
+    min-width: 0;
+  }
+  .logo-img {
+    max-width: 190px;
+  }
+  .header-search {
+    position: absolute !important;
+    top: calc(var(--header-h) + 8px) !important;
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .h-search-wrap {
+    height: 42px !important;
+  }
+  #headerSearchInput {
+    height: 42px !important;
+    min-height: 42px !important;
+    font-size: 16px !important;
+    background: var(--bg-elevated) !important;
+    border-color: rgba(255,255,255,0.12) !important;
+  }
+  body.light #headerSearchInput {
+    background: #fff !important;
+    border-color: rgba(0,0,0,0.12) !important;
+  }
+  .h-search-results {
+    top: calc(100% + 8px) !important;
+    max-height: min(60vh, 430px) !important;
+  }
+  .header-actions {
+    margin-left: auto !important;
+    order: 2 !important;
+  }
+  .menu-toggle {
+    order: 3 !important;
+    margin-left: 0 !important;
+  }
+
+  /* Prevent the search row from colliding with the page content. */
+  #homeView {
+    padding-top: 58px;
+  }
+}
+
+@media (max-width: 600px) {
+  :root { --header-h: 56px; }
+  .header-inner { padding: 0 10px; }
+  .logo-img {
+    height: 34px !important;
+    max-width: 45vw !important;
+  }
+  .header-actions { gap: 5px; }
+  .icon-btn {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+  }
+  .menu-toggle {
+    width: 36px;
+    height: 36px;
+    padding: 7px;
+  }
+  .header-search {
+    left: 10px !important;
+    right: 10px !important;
+    top: calc(var(--header-h) + 7px) !important;
+  }
+  #headerSearchInput {
+    height: 42px !important;
+    min-height: 42px !important;
+    padding-left: 42px !important;
+    padding-right: 40px !important;
+  }
+  #homeView { padding-top: 56px; }
+
+  /* Make the main search panel truly phone-friendly. */
+  .search-panel-inner {
+    padding: 14px 12px 10px !important;
+  }
+  .search-field label {
+    font-size: 0.85rem;
+  }
+  .search-input-wrap {
+    width: 100%;
+  }
+  .search-input-wrap input {
+    min-width: 0;
+    width: 100%;
+  }
+  .filters-row {
+    overflow-x: auto !important;
+    scrollbar-width: none;
+    padding-bottom: 8px !important;
+  }
+  .filters-row::-webkit-scrollbar { display: none; }
+  .filter-group {
+    min-width: 118px !important;
+  }
+  .filter-group select {
+    width: 100%;
+    min-width: 118px !important;
+  }
+  .section-block {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .logo-img { max-width: 40vw !important; }
+  .header-inner { gap: 5px; }
+  .icon-btn, .menu-toggle {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+  }
+}
+
+/* ===== FINAL MOBILE LAYOUT + FAST FIRST PAINT ===== */
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+img {
+  max-width: 100%;
+}
+
+@media (max-width: 600px) {
+  :root { --header-h: 108px; }
+
+  .header {
+    height: var(--header-h) !important;
+    overflow: visible;
+  }
+
+  .header-inner {
+    height: var(--header-h) !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    padding: 0 10px !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto auto !important;
+    grid-template-rows: 56px 52px !important;
+    column-gap: 7px !important;
+    row-gap: 0 !important;
+    align-items: center !important;
+  }
+
+  .logo {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden;
+  }
+
+  .logo-img {
+    display: block !important;
+    width: auto !important;
+    height: 38px !important;
+    max-width: min(190px, 52vw) !important;
+    object-fit: contain !important;
+  }
+
+  .header-actions {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .menu-toggle {
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+    display: flex !important;
+    margin: 0 !important;
+  }
+
+  .header-search {
+    grid-column: 1 / -1 !important;
+    grid-row: 2 !important;
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 5px 0 7px !important;
+    z-index: 310 !important;
+  }
+
+  .h-search-wrap {
+    width: 100% !important;
+    height: 40px !important;
+  }
+
+  #headerSearchInput {
+    width: 100% !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    font-size: 16px !important;
+    padding: 0 38px 0 40px !important;
+    border-radius: 10px !important;
+  }
+
+  .h-search-results {
+    top: calc(100% + 4px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-height: 55vh !important;
+    overflow-y: auto !important;
+  }
+
+  /* The mobile header now owns the quick-search row; don't add another offset. */
+  #homeView {
+    padding-top: 0 !important;
+  }
+
+  .search-panel {
+    padding: 14px 0 10px !important;
+  }
+
+  .search-panel-inner {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 12px !important;
+  }
+
+  .search-input-wrap {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  #searchInput {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .filters-row {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .section-block {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: 24px 10px 0 !important;
+    overflow: hidden;
+  }
+
+  .section-header {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    gap: 8px !important;
+  }
+
+  .section-title-wrap {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .section-title-wrap > div:last-child {
+    min-width: 0 !important;
+  }
+
+  .section-header h2 {
+    font-size: 1.15rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .section-desc {
+    max-width: 100% !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .results-count {
+    flex: 0 0 auto !important;
+    font-size: 0.72rem !important;
+  }
+
+  .movie-grid {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 18px 10px !important;
+    padding: 0 !important;
+  }
+
+  .movie-card {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden;
+  }
+
+  .poster-wrap {
+    width: 100% !important;
+    min-width: 0 !important;
+    aspect-ratio: 2 / 3 !important;
+  }
+
+  .poster-img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+  }
+
+  .card-title,
+  .card-year {
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .card-title { font-size: 0.82rem !important; }
+  .card-year { font-size: 0.72rem !important; }
+
+  /* Reduce expensive visual effects on phones. */
+  .movie-card:hover,
+  .movie-card:hover .poster-img {
+    transform: none !important;
+  }
+
+  .poster-overlay { display: none !important; }
+
+  .hero,
+  .details-hero {
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+
+  main, #app, #homeView, #moviesSection {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .header-inner { padding: 0 8px !important; }
+  .logo-img { height: 35px !important; max-width: 50vw !important; }
+  .movie-grid { gap: 16px 8px !important; }
+  .section-block { padding-left: 8px !important; padding-right: 8px !important; }
+}

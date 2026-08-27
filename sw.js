@@ -1,4 +1,4 @@
-const CACHE = 'mbps-v21';
+const CACHE = 'mbps-v22';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json', './icons/logo-header.png', './icons/favicon.ico', './icons/favicon.svg', './icons/icon-192.png', './icons/sprite.svg'];
 
 self.addEventListener('install', (e) => {
@@ -21,9 +21,21 @@ self.addEventListener('fetch', (e) => {
   }
 
   const url = new URL(e.request.url);
-  // Network-first for API, cache-first for app shell
+  // Stale-while-revalidate for the movie API: show a cached catalog immediately
+  // on repeat visits, while quietly refreshing it in the background.
   if (url.hostname.includes('accel.li') || url.pathname.includes('list_movies') || url.pathname.includes('movie_details')) {
-    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+    e.respondWith(
+      caches.match(e.request).then(cached => {
+        const network = fetch(e.request).then(res => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then(c => c.put(e.request, copy));
+          }
+          return res;
+        }).catch(() => cached);
+        return cached || network;
+      })
+    );
     return;
   }
   if (e.request.method !== 'GET') return;
