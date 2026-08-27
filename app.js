@@ -18,6 +18,10 @@ const state = {
 };
 
 const $ = (sel) => document.querySelector(sel);
+const on = (id, event, fn) => {
+  const el = (typeof id === 'string') ? $(id) : id;
+  if (el) el.addEventListener(event, fn);
+};
 const movieGrid = $('#movieGrid');
 const loadingEl = $('#loading');
 const emptyEl = $('#empty');
@@ -102,7 +106,7 @@ function renderRecent() {
       <img src="${fixImageUrl(m.medium_cover_image)}" alt="" loading="lazy" onerror="this.style.opacity=0.3" />
       <div class="card-title">${escapeHtml(m.title)}</div>
     `;
-    card.addEventListener('click', () => openDetails(m.id, m.title + (m.year ? ' ' + m.year : '')));
+    on(card, 'click', () => openDetails(m.id, m.title + (m.year ? ' ' + m.year : '')));
     strip.appendChild(card);
   });
   if (strip) { strip.dataset.swipeBound = ''; bindStripSwipe('.recent-strip'); }
@@ -130,7 +134,7 @@ const GENRES = ['Action','Adventure','Animation','Comedy','Crime','Documentary',
     btn.className = 'genre-chip';
     btn.textContent = g;
     btn.dataset.genre = g;
-    btn.addEventListener('click', () => {
+    on(btn, 'click', () => {
       const active = btn.classList.contains('active');
       document.querySelectorAll('.genre-chip').forEach(c => c.classList.remove('active'));
       if (!active) {
@@ -164,7 +168,7 @@ function renderGenresHub() {
       btn.className = 'genre-card' + (state.genre === g ? ' active' : '');
       btn.dataset.genre = g;
       btn.innerHTML = `<span class="genre-card-ico" aria-hidden="true">${GENRE_ICONS[g] || '🎬'}</span><span>${escapeHtml(g)}</span>`;
-      btn.addEventListener('click', () => selectGenreFromHub(g));
+      on(btn, 'click', () => selectGenreFromHub(g));
       grid.appendChild(btn);
     });
     grid.dataset.ready = '1';
@@ -551,17 +555,17 @@ function renderMovieCard(movie) {
     <div class="card-title">${escapeHtml(movie.title)}</div>
     <div class="card-year">${movie.year}</div>
   `;
-  card.querySelector('.card-watch').addEventListener('click', (e) => {
+  on(card.querySelector('.card-watch'), 'click', (e) => {
     e.stopPropagation();
     const on = toggleWatchlist(movie);
     e.currentTarget.classList.toggle('on', on);
     e.currentTarget.textContent = on ? '♥' : '♡';
     if (state.mode === 'watchlist') loadWatchlist();
   });
-  card.addEventListener('click', () => openDetails(movie.id, movie.title + (movie.year ? ' ' + movie.year : '')));
-  card.addEventListener('mouseenter', () => prefetchDetails(movie.id));
-  card.addEventListener('mouseleave', () => cancelPrefetch(movie.id));
-  card.addEventListener('touchstart', () => prefetchDetails(movie.id), { passive: true });
+  on(card, 'click', () => openDetails(movie.id, movie.title + (movie.year ? ' ' + movie.year : '')));
+    on(card, 'mouseenter', () => prefetchDetails(movie.id));
+    on(card, 'mouseleave', () => cancelPrefetch(movie.id));
+    on(card, 'touchstart', () => prefetchDetails(movie.id), { passive: true });
   return card;
 }
 
@@ -710,7 +714,7 @@ function renderPagination() {
       const btn = document.createElement('button');
       btn.className = `page-btn ${p === current ? 'active' : ''}`;
       btn.textContent = p;
-      btn.addEventListener('click', () => loadMovies(false, p));
+      on(btn, 'click', () => loadMovies(false, p));
       paginationEl.appendChild(btn);
     }
   });
@@ -719,7 +723,7 @@ function renderPagination() {
     const next = document.createElement('button');
     next.className = 'page-btn next-btn';
     next.innerHTML = 'Next &raquo;';
-    next.addEventListener('click', () => loadMovies(false, current + 1));
+    on(next, 'click', () => loadMovies(false, current + 1));
     paginationEl.appendChild(next);
   }
 }
@@ -941,14 +945,14 @@ function renderDetails(movie) {
     if (map[kind]) window.open(map[kind], '_blank', 'noopener,width=600,height=500');
   }
 
-  shareBtn.addEventListener('click', (e) => {
+  on(shareBtn, 'click', (e) => {
     e.stopPropagation();
     const open = shareMenu.hidden;
     document.querySelectorAll('.share-menu').forEach(m => { m.hidden = true; });
     shareMenu.hidden = !open;
     shareBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
-  shareMenu.addEventListener('click', (e) => {
+  on(shareMenu, 'click', (e) => {
     const item = e.target.closest('[data-share]');
     if (!item) return;
     e.stopPropagation();
@@ -1046,7 +1050,7 @@ function renderDetails(movie) {
       const card = document.createElement('div');
       card.className = 'shot-card';
       card.innerHTML = `<img src="${s.medium}" alt="Screenshot" loading="lazy" />`;
-      card.addEventListener('click', () => openLightbox(s.large));
+      on(card, 'click', () => openLightbox(s.large));
       shotsGrid.appendChild(card);
     });
     bindStripSwipe('.shots-grid');
@@ -1071,7 +1075,7 @@ function openLightbox(src) {
     lb.className = 'lightbox';
     lb.innerHTML = '<button class="lightbox-close" aria-label="Close">&times;</button><img alt="Screenshot" />';
     document.body.appendChild(lb);
-    lb.addEventListener('click', (e) => {
+    on(lb, 'click', (e) => {
       if (e.target === lb || e.target.classList.contains('lightbox-close')) {
         lb.hidden = true;
         document.body.style.overflow = '';
@@ -1182,28 +1186,28 @@ function clearFilters() {
 }
 
 // Events
-$('#searchBtn').addEventListener('click', applyFiltersAndSearch);
-searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFiltersAndSearch(); });
+on('#searchBtn', 'click', applyFiltersAndSearch);
+on(searchInput, 'keydown', (e) => { if (e.key === 'Enter') applyFiltersAndSearch(); });
 ['filterQuality','filterGenre','filterRating','filterYear','filterLanguage','filterOrder'].forEach(id => {
-  $(`#${id}`).addEventListener('change', applyFiltersAndSearch);
+  on(`#${id}`, 'change', applyFiltersAndSearch);
 });
-$('#backBtn').addEventListener('click', closeDetails);
-$('#clearFiltersBtn').addEventListener('click', clearFilters);
-$('#clearRecent').addEventListener('click', () => {
+on('#backBtn', 'click', closeDetails);
+on('#clearFiltersBtn', 'click', clearFilters);
+on('#clearRecent', 'click', () => {
   LS.set('mbps_recent', []);
   renderRecent();
 });
 
-$('#logo').addEventListener('click', (e) => {
+on('#logo', 'click', (e) => {
   e.preventDefault();
   if (state.currentMovieId) closeDetails();
   clearFilters();
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.querySelector('.nav-item[data-view="browse"]').classList.add('active');
+  document.querySelector('.nav-item[data-view="browse"]')?.classList.add('active');
 });
 
 document.querySelectorAll('.nav-item').forEach(item => {
-  item.addEventListener('click', (e) => {
+  on(item, 'click', (e) => {
     e.preventDefault();
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     item.classList.add('active');
@@ -1223,13 +1227,14 @@ document.querySelectorAll('.nav-item').forEach(item => {
     }
     state.mode = 'browse';
     state.query = '';
-    searchInput.value = '';
+    const si = searchInput;
+    if (si) si.value = '';
     state.quality = state.genre = state.rating = state.year = state.language = '';
-    $('#filterQuality').value = '';
-    $('#filterGenre').value = '';
-    $('#filterRating').value = '';
-    $('#filterYear').value = '';
-    $('#filterLanguage').value = '';
+    const fq = $('#filterQuality'); if (fq) fq.value = '';
+    const fg = $('#filterGenre'); if (fg) fg.value = '';
+    const fr = $('#filterRating'); if (fr) fr.value = '';
+    const fy = $('#filterYear'); if (fy) fy.value = '';
+    const fl = $('#filterLanguage'); if (fl) fl.value = '';
     document.querySelectorAll('.genre-chip').forEach(c => c.classList.remove('active'));
     document.querySelectorAll('.genre-card').forEach(c => c.classList.remove('active'));
     const hub = $('#genresHub');
@@ -1238,17 +1243,17 @@ document.querySelectorAll('.nav-item').forEach(item => {
     if (moviesSec) moviesSec.hidden = false;
     if (view === '4k') {
       state.quality = '2160p';
-      $('#filterQuality').value = '2160p';
+      const fq2 = $('#filterQuality'); if (fq2) fq2.value = '2160p';
       state.sort = 'latest';
     } else if (view === 'top') {
       state.sort = 'rating';
-      $('#filterOrder').value = 'rating';
+      const fo = $('#filterOrder'); if (fo) fo.value = 'rating';
     } else if (view === 'trending') {
       state.sort = 'seeds';
-      $('#filterOrder').value = 'seeds';
+      const fo2 = $('#filterOrder'); if (fo2) fo2.value = 'seeds';
     } else {
       state.sort = 'latest';
-      $('#filterOrder').value = 'latest';
+      const fo3 = $('#filterOrder'); if (fo3) fo3.value = 'latest';
     }
     if (state.currentMovieId) closeDetails();
     loadMovies(true);
@@ -1292,7 +1297,7 @@ function applyTheme(theme) {
     applyTheme(prefersLight ? 'light' : 'dark');
   }
 })();
-$('#themeToggle').addEventListener('click', () => {
+on('#themeToggle', 'click', () => {
   applyTheme(document.body.classList.contains('light') ? 'dark' : 'light');
 });
 
@@ -1457,14 +1462,16 @@ let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  $('#installBtn').hidden = false;
+  const btn = $('#installBtn');
+  if (btn) btn.hidden = false;
 });
-$('#installBtn').addEventListener('click', async () => {
+on('#installBtn', 'click', async () => {
   if (!deferredPrompt) return;
   deferredPrompt.prompt();
   await deferredPrompt.userChoice;
   deferredPrompt = null;
-  $('#installBtn').hidden = true;
+  const btn = $('#installBtn');
+  if (btn) btn.hidden = true;
 });
 
 // Modals (legal + trailer)
@@ -1528,19 +1535,21 @@ function openModal(key, titleOverride, bodyOverride) {
   document.body.style.overflow = 'hidden';
 }
 function closeModal() {
-  $('#modalOverlay').hidden = true;
+  const ov = $('#modalOverlay');
+  if (ov) ov.hidden = true;
   document.body.style.overflow = '';
   // stop youtube if trailer was open
-  $('#modalBody').innerHTML = '';
+  const body = $('#modalBody');
+  if (body) body.innerHTML = '';
 }
-$('#modalClose').addEventListener('click', closeModal);
-$('#modalOverlay').addEventListener('click', (e) => { if (e.target === $('#modalOverlay')) closeModal(); });
+on('#modalClose', 'click', closeModal);
+on('#modalOverlay', 'click', (e) => { if (e.target === $('#modalOverlay')) closeModal(); });
 
 document.querySelectorAll('[data-modal]').forEach(el => {
-  el.addEventListener('click', (e) => { e.preventDefault(); openModal(el.dataset.modal); });
+  on(el, 'click', (e) => { e.preventDefault(); openModal(el.dataset.modal); });
 });
 document.querySelectorAll('[data-page]').forEach(el => {
-  el.addEventListener('click', (e) => {
+  on(el, 'click', (e) => {
     e.preventDefault();
     const view = el.dataset.page;
     const nav = document.querySelector(`.nav-item[data-view="${view}"]`);
@@ -1609,14 +1618,14 @@ function closeMenu() {
 }
 
 if (menuToggle) {
-  menuToggle.addEventListener('click', function(e) {
+  on(menuToggle, 'click', function(e) {
     e.stopPropagation();
     if (sideMenu && sideMenu.classList.contains('is-open')) closeMenu();
     else openMenu();
   });
 }
-if (menuCloseBtn) menuCloseBtn.addEventListener('click', closeMenu);
-if (menuBackdrop) menuBackdrop.addEventListener('click', closeMenu);
+on('#menuClose', 'click', closeMenu);
+on('#menuBackdrop', 'click', closeMenu);
 
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape' && sideMenu && sideMenu.classList.contains('is-open')) closeMenu();
@@ -1626,7 +1635,7 @@ window.addEventListener('resize', function() {
 });
 
 document.querySelectorAll('.side-menu-item[data-view]').forEach(function(el) {
-  el.addEventListener('click', function(e) {
+  on(el, 'click', function(e) {
     e.preventDefault();
     var view = el.dataset.view;
     var nav = document.querySelector('.nav-item[data-view="' + view + '"]');
@@ -1635,7 +1644,7 @@ document.querySelectorAll('.side-menu-item[data-view]').forEach(function(el) {
   });
 });
 document.querySelectorAll('.side-menu-item[data-modal]').forEach(function(el) {
-  el.addEventListener('click', function(e) {
+  on(el, 'click', function(e) {
     e.preventDefault();
     closeMenu();
     if (typeof openModal === 'function') openModal(el.dataset.modal);
