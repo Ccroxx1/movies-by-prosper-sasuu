@@ -1,3 +1,11 @@
+function debounce(fn, delay) {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn(...args), delay);
+  };
+}
+
 const API = 'https://movies-api.accel.li/api/v2';
 
 const state = {
@@ -18,18 +26,94 @@ const state = {
 };
 
 const $ = (sel) => document.querySelector(sel);
-const on = (id, event, fn) => {
-  const el = (typeof id === 'string') ? $(id) : id;
-  if (el) el.addEventListener(event, fn);
-};
 const movieGrid = $('#movieGrid');
 const loadingEl = $('#loading');
 const emptyEl = $('#empty');
 const paginationEl = $('#pagination');
 const searchInput = $('#searchInput');
+const hSearchInput = $('#headerSearchInput');
+const hSearchResults = $('#headerSearchResults');
+const hSearchClear = $('#headerSearchClear');
 const homeView = $('#homeView');
 const detailsView = $('#detailsView');
 const hero = $('#hero');
+
+const on = (id, event, fn) => {
+  const el = (typeof id === 'string') ? $(id) : id;
+  if (el) el.addEventListener(event, fn);
+};
+
+async function quickSearch(query) {
+  if (!query.trim()) {
+    hSearchResults.hidden = true;
+    hSearchClear.hidden = true;
+    return;
+  }
+  hSearchClear.hidden = false;
+
+  try {
+    const res = await fetch(`${API}/list_movies.json?query_term=${encodeURIComponent(query)}&limit=5`);
+    const json = await res.json();
+    if (json.status !== 'ok' || !json.data.movies) {
+      renderQuickResults([]);
+      return;
+    }
+    renderQuickResults(json.data.movies);
+  } catch (err) {
+    console.error('Quick search error:', err);
+  }
+}
+
+function renderQuickResults(movies) {
+  hSearchResults.innerHTML = '';
+  hSearchResults.hidden = false;
+
+  if (movies.length === 0) {
+    hSearchResults.innerHTML = '<div class="h-search-empty">No movies found.</div>';
+    return;
+  }
+
+  const header = document.createElement('div');
+  header.className = 'h-search-header';
+  header.textContent = 'Quick Cinema Search';
+  hSearchResults.appendChild(header);
+
+  movies.forEach(m => {
+    const item = document.createElement('div');
+    item.className = 'h-result-item';
+    const quality = m.torrents?.[0]?.quality || '720p';
+    item.innerHTML = `
+      <img src="${fixImageUrl(m.small_cover_image || m.medium_cover_image)}" class="h-result-img" alt="">
+      <div class="h-result-info">
+        <div class="h-result-title">${escapeHtml(m.title)}</div>
+        <div class="h-result-meta">${m.year} • <span class="rating">★ ${m.rating}</span> • ${m.genres?.[0] || 'Movie'}</div>
+      </div>
+      <div class="h-result-quality">${quality}</div>
+    `;
+    item.onclick = () => {
+      hSearchResults.hidden = true;
+      hSearchInput.value = '';
+      hSearchClear.hidden = true;
+      openDetails(m.id, m.title + (m.year ? ' ' + m.year : ''));
+    };
+    hSearchResults.appendChild(item);
+  });
+}
+
+on(hSearchInput, 'input', debounce((e) => quickSearch(e.target.value), 300));
+on(hSearchClear, 'click', () => {
+  hSearchInput.value = '';
+  hSearchResults.hidden = true;
+  hSearchClear.hidden = true;
+  hSearchInput.focus();
+});
+
+// Close dropdown on click outside
+on(document, 'click', (e) => {
+  if (!e.target.closest('.header-search')) {
+    hSearchResults.hidden = true;
+  }
+});
 
 // ---- Storage helpers ----
 const LS = {

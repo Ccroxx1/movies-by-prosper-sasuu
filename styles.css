@@ -88,8 +88,10 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  flex: 1;
   overflow-x: auto;
+}
+@media (min-width: 1201px) {
+  .nav-links { flex: 0 1 auto; }
 }
 .nav-item {
   color: var(--text-muted);
@@ -1108,7 +1110,154 @@ body.light .details-overlay {
 }
 
 /* Header actions */
-.header-actions { display: flex; gap: 8px; margin-left: auto; flex-shrink: 0; }
+.header-actions { display: flex; gap: 8px; margin-left: 0; flex-shrink: 0; }
+
+/* Header Search */
+.header-search {
+  position: relative;
+  flex: 1;
+  max-width: 400px;
+  margin: 0 12px;
+  min-width: 140px;
+}
+@media (max-width: 1200px) {
+  .header-search { max-width: 320px; }
+}
+@media (max-width: 960px) {
+  .header-search { margin: 0 8px; max-width: none; }
+}
+.h-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.h-search-ico {
+  position: absolute;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+#headerSearchInput {
+  width: 100%;
+  height: 38px;
+  padding: 0 36px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.85rem;
+  outline: none;
+  transition: all var(--transition);
+}
+#headerSearchInput:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(229, 9, 20, 0.5);
+  box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.1);
+}
+.h-search-clear {
+  position: absolute;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.h-search-clear:hover { color: var(--text); background: rgba(255,255,255,0.1); }
+
+/* Quick Search Dropdown */
+.h-search-results {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 0;
+  right: 0;
+  background: rgba(20, 20, 20, 0.85);
+  backdrop-filter: blur(25px) saturate(180%);
+  -webkit-backdrop-filter: blur(25px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 30px 60px rgba(0,0,0,0.6);
+  overflow: hidden;
+  z-index: 300;
+  max-height: 520px;
+  animation: slideUp 0.25s cubic-bezier(0, 0, 0.2, 1);
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+body.light .h-search-results {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+.h-result-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-decoration: none;
+  color: inherit;
+}
+.h-result-item:hover { background: rgba(229, 9, 20, 0.1); }
+.h-result-item:not(:last-child) { border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+body.light .h-result-item:not(:last-child) { border-bottom-color: rgba(0, 0, 0, 0.05); }
+
+.h-result-img {
+  width: 40px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--bg-card);
+}
+.h-result-info { flex: 1; min-width: 0; }
+.h-result-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.h-result-meta {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.h-result-meta .rating { color: var(--gold); }
+.h-result-quality {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+.h-search-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+.h-search-header {
+  padding: 10px 14px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
 .icon-btn {
   height: 36px;
   min-width: 36px;
@@ -2225,6 +2374,9 @@ body.light .side-menu-footer { border-top-color: rgba(0,0,0,0.08); }
   .nav-links {
     display: none !important;
   }
+}
+@media (max-width: 600px) {
+  .header-search { display: none; }
 }
 @media (min-width: 961px) {
   .menu-toggle { display: none !important; }

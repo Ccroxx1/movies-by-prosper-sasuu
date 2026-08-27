@@ -179,6 +179,16 @@
         <a href="#" class="nav-item" data-view="genres"><svg class="nav-ico" aria-hidden="true"><use href="#i-grid"/></svg> Genres</a>
         <a href="#" class="nav-item" data-view="watchlist"><svg class="nav-ico" aria-hidden="true"><use href="#i-heart"/></svg> Watchlist <span class="nav-badge" id="watchlistBadge" hidden>0</span></a>
       </nav>
+
+      <div class="header-search">
+        <div class="h-search-wrap">
+          <svg class="h-search-ico"><use href="#i-search"/></svg>
+          <input type="text" id="headerSearchInput" placeholder="Quick search..." autocomplete="off" />
+          <button id="headerSearchClear" class="h-search-clear" hidden>&times;</button>
+        </div>
+        <div class="h-search-results" id="headerSearchResults" hidden></div>
+      </div>
+
       <div class="header-actions">
         <button class="icon-btn" id="themeToggle" title="Toggle theme" aria-label="Toggle theme"><svg class="btn-ico" aria-hidden="true"><use href="#i-moon"/></svg></button>
         <button class="icon-btn" id="installBtn" title="Install app" hidden><svg class="btn-ico" aria-hidden="true"><use href="#i-install"/></svg> Install</button>
