@@ -1,8 +1,51 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Root homepage -->
   <url>
     <loc>https://movies-by-prosper-sasuu.vercel.app/</loc>
     <changefreq>hourly</changefreq>
     <priority>1.0</priority>
+  </url>
+  
+  <!-- Browse all movies section -->
+  <url>
+    <loc>https://movies-by-prosper-sasuu.vercel.app/?_escaped_fragment_=/browse</loc>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  
+  <!-- Trending movies section -->
+  <url>
+    <loc>https://movies-by-prosper-sasuu.vercel.app/?_escaped_fragment_=/trending</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.85</priority>
+  </url>
+  
+  <!-- 4K UHD section -->
+  <url>
+    <loc>https://movies-by-prosper-sasuu.vercel.app/?_escaped_fragment_=/4k</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  
+  <!-- Top Rated section -->
+  <url>
+    <loc>https://movies-by-prosper-sasuu.vercel.app/?_escaped_fragment_=/top</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  
+  <!-- Watchlist section -->
+  <url>
+    <loc>https://movies-by-prosper-sasuu.vercel.app/?_escaped_fragment_=/watchlist</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  
+  <!-- Browse by Genre section -->
+  <url>
+    <loc>https://movies-by-prosper-sasuu.vercel.app/?_escaped_fragment_=/genres</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
   </url>
 </urlset>
