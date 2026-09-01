@@ -305,6 +305,12 @@ function selectGenreFromHub(genre) {
   const moviesSec = $('#moviesSection');
   if (hub) hub.hidden = true;
   if (moviesSec) moviesSec.hidden = false;
+
+  const targetPath = `/genres/${encodeURIComponent(genre)}`;
+  if (location.pathname !== targetPath) {
+    history.pushState({ genre }, '', targetPath);
+  }
+
   loadMovies(true);
 }
 
@@ -328,6 +334,10 @@ function showGenresHub() {
   loadingEl.hidden = true;
   const pgWrap = $('.pagination-wrap');
   if (pgWrap) pgWrap.hidden = true;
+
+  if (location.pathname !== '/genres') {
+    history.pushState({ view: 'genres' }, '', '/genres');
+  }
 }
 
 
@@ -1381,9 +1391,31 @@ function handleRoute() {
   const id = parseMovieIdFromLocation();
   if (id != null) {
     if (id !== state.currentMovieId) openDetails(id);
-  } else {
+    return;
+  }
+
+  // Handle path-based category routing
+  const path = location.pathname.toLowerCase().replace(/\/$/, '');
+  const navItems = document.querySelectorAll('.nav-item');
+
+  if (path === '/trending') {
+    const nav = document.querySelector('.nav-item[data-view="trending"]');
+    if (nav) nav.click();
+  } else if (path === '/4k') {
+    const nav = document.querySelector('.nav-item[data-view="4k"]');
+    if (nav) nav.click();
+  } else if (path === '/top-rated') {
+    const nav = document.querySelector('.nav-item[data-view="top"]');
+    if (nav) nav.click();
+  } else if (path === '/genres') {
+    const nav = document.querySelector('.nav-item[data-view="genres"]');
+    if (nav) nav.click();
+  } else if (path.startsWith('/genres/')) {
+    const genre = decodeURIComponent(path.split('/')[2]);
+    const formattedGenre = genre.charAt(0).toUpperCase() + genre.slice(1).toLowerCase();
+    selectGenreFromHub(formattedGenre);
+  } else if (path === '' || path === '/' || path === '/index.html') {
     if (state.currentMovieId) {
-      // left movie URL
       state.currentMovieId = null;
       detailsView.hidden = true;
       homeView.hidden = false;
@@ -1442,6 +1474,9 @@ on('#clearRecent', 'click', () => {
 
 on('#logo', 'click', (e) => {
   e.preventDefault();
+  if (location.pathname !== '/') {
+    history.pushState({}, '', '/');
+  }
   if (state.currentMovieId) closeDetails();
   clearFilters();
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -1454,6 +1489,13 @@ document.querySelectorAll('.nav-item').forEach(item => {
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     item.classList.add('active');
     const view = item.dataset.view;
+
+    // Update URL for the view
+    const viewPath = view === 'browse' ? '/' : `/${view}`;
+    if (location.pathname !== viewPath && view !== 'watchlist' && view !== 'genres') {
+      history.pushState({ view }, '', viewPath);
+    }
+
     if (view === 'watchlist') {
       if (state.currentMovieId) closeDetails();
       const hub = $('#genresHub');
