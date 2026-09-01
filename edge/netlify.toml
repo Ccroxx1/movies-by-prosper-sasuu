@@ -1,0 +1,14 @@
+[[edge_functions]]
+  function = "movie-og"
+  path = "/movie/*"
+
+[[redirects]]
+  from = "/movie/*"
+  to = "/index.html"
+  status = 200
+  force = false
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

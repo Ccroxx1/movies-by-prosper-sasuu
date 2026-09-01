@@ -1,0 +1,7 @@
+- [ ] Move SEO summary and ad slots to homeView in `index.html`
+- [ ] Refine UI and aesthetics in `styles.css`
+  - [ ] Compact action buttons grid on mobile
+  - [ ] Refine torrent cards
+  - [ ] Glassmorphism for details hero
+  - [ ] Tabs active state improvement
+- [ ] Update visibility logic in `app.js`
