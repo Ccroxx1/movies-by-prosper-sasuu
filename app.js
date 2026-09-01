@@ -1025,11 +1025,35 @@ function renderDetails(movie) {
 
   const bg = fixImageUrl(movie.background_image_original || movie.large_cover_image || movie.background_image);
   $('#detailsBg').style.backgroundImage = `url(${bg})`;
+
   const poster = $('#detailsPoster');
   poster.src = fixImageUrl(movie.large_cover_image || movie.medium_cover_image);
   poster.alt = movie.title;
   poster.width = 300;
   poster.height = 450;
+
+  const watched = isInWatchlist(movie.id);
+  const wlBtn = $('#detailsWatchlistBtn');
+  if (wlBtn) {
+    wlBtn.classList.toggle('on', watched);
+    wlBtn.textContent = watched ? '♥' : '♡';
+    wlBtn.onclick = (e) => {
+      e.stopPropagation();
+      const now = toggleWatchlist(movie);
+      wlBtn.classList.toggle('on', now);
+      wlBtn.textContent = now ? '♥' : '♡';
+      // Update the other watchlist button in actions if it exists
+      const actionWl = $('#detailsActions .btn-secondary');
+      if (actionWl) actionWl.textContent = now ? '♥ In Watchlist' : '❤ Watchlist';
+    };
+  }
+
+  const badge = $('#detailsRatingBadge');
+  if (badge) {
+    badge.innerHTML = stars(movie.rating);
+    badge.hidden = !movie.rating;
+  }
+
   $('#detailsTitle').textContent = movie.title;
   setMovieStructuredData(movie);
 
