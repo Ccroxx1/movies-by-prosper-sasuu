@@ -1,0 +1,14 @@
+{
+  "name": "movies-by-prosper-sasuu",
+  "version": "1.0.0",
+  "description": "Discover and browse thousands of HD and 4K movies for free. Filter by genre, rating, and year. Get trailers, cast info, and manage your watchlist on Movies By Prosper Sasuu.",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "node -e \"console.log('Build complete')\""
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

@@ -63,6 +63,9 @@
   <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
   <link rel="dns-prefetch" href="https://www.clarity.ms" />
   <link rel="dns-prefetch" href="https://pagead2.googlesyndication.com" />
+  <link rel="dns-prefetch" href="https://pl31437955.profitableratecpmnetwork.com" />
+  <link rel="dns-prefetch" href="https://pl31437954.profitableratecpmnetwork.com" />
+  <link rel="dns-prefetch" href="https://pl31437956.profitableratecpmnetwork.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=Bebas+Neue&amp;display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 
@@ -153,13 +156,6 @@
   }
   </script>
 
-  <script>
-    // Push Auto ads when AdSense is approved (safe no-op if blocked)
-    (window.adsbygoogle = window.adsbygoogle || []).push({
-      google_ad_client: "ca-pub-6128111645137702",
-      enable_page_level_ads: true
-    });
-  </script>
   <script type="application/ld+json" id="movieJsonLd"></script>
 </head>
 <body>
@@ -418,10 +414,13 @@
         </div>
       </div>
 
-      <!-- Reserved space for Google Auto ads / future manual units -->
+      <!-- Adsterra Native Banner -->
       <aside class="ad-slot ad-slot-mid" id="adMid" aria-label="Advertisement">
-        <div class="ad-label">Ad</div>
-        <div class="ad-container" data-ad-pos="mid"></div>
+        <div class="ad-label">Sponsored</div>
+        <div class="ad-container" data-ad-pos="mid">
+          <script async="async" data-cfasync="false" src="https://pl31437955.profitableratecpmnetwork.com/0277d7d8f350bc1a2f3640f04d6f864a/invoke.js"></script>
+          <div id="container-0277d7d8f350bc1a2f3640f04d6f864a"></div>
+        </div>
       </aside>
     </section>
 
@@ -562,8 +561,15 @@
   <script src="/app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        reg.update().catch(() => {});
+      }).catch(() => {});
     }
   </script>
+
+  <!-- Adsterra Popunder -->
+  <script src="https://pl31437954.profitableratecpmnetwork.com/1d/71/8f/1d718fdfaf17e381d15bc5e94cf0e8802.js"></script>
+  <!-- Adsterra SocialBar -->
+  <script src="https://pl31437956.profitableratecpmnetwork.com/9f/2e/cf/9f2ecf1fd0cdf4eaafa750564bd85d63.js"></script>
 </body>
 </html>

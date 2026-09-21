@@ -1696,7 +1696,8 @@ body.light .share-menu {
   min-height: auto;
 }
 .ad-slot-top { margin-top: 8px; }
-.ad-slot-mid { margin: 28px auto; max-width: 728px; }
+.ad-slot-mid { margin: 28px auto; max-width: 1000px; }
+.ad-container [id^="container-"] { width: 100%; min-height: 50px; }
 .ad-slot-footer { margin: 24px auto 8px; max-width: 970px; }
 .ad-slot-details { margin: 28px 0 8px; max-width: 100%; }
 

@@ -533,10 +533,10 @@ function initAdSlots() {
     // Optional: request a responsive unit when slots exist in AdSense
     // (requires real slot IDs - keep Auto ads as primary)
   });
-  // Observe when iframes from ads appear → mark loaded (layout stability)
+  // Observe when iframes or ad nodes appear → mark loaded (layout stability)
   const obs = new MutationObserver(() => {
     document.querySelectorAll('.ad-slot').forEach(slot => {
-      if (slot.querySelector('iframe')) slot.classList.add('ad-loaded');
+      if (slot.querySelector('iframe, [id^="container-"] > *, a, img')) slot.classList.add('ad-loaded');
     });
   });
   document.querySelectorAll('.ad-slot').forEach(slot => {

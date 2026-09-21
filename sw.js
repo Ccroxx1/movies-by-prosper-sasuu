@@ -1,4 +1,4 @@
-const CACHE = 'mbps-v22';
+const CACHE = 'mbps-v23';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json', './icons/logo-header.png', './icons/favicon.ico', './icons/favicon.svg', './icons/icon-192.png', './icons/sprite.svg'];
 
 self.addEventListener('install', (e) => {
@@ -17,6 +17,20 @@ self.addEventListener('fetch', (e) => {
   // Never cache-control crawler files incorrectly
   if (/\/(robots\.txt|ads\.txt|sitemap\.xml)$/.test(path)) {
     e.respondWith(fetch(e.request));
+    return;
+  }
+
+  // Network-first for HTML pages so changes and bug fixes apply immediately
+  if (e.request.mode === 'navigate' || path === '/' || path.endsWith('.html')) {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy));
+        }
+        return res;
+      }).catch(() => caches.match(e.request))
+    );
     return;
   }
 
