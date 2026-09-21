@@ -18,12 +18,13 @@ vercel --prod
 ```
 
 ### Option B — GitHub
-1. Create a GitHub repo and push these files.
-2. vercel.com → **Add New Project** → import the repo.
-3. Framework Preset: **Other**
-4. Build Command: leave empty  
-   Output Directory: leave empty (or `.`)
-5. Deploy.
+1. Push these files to your GitHub repository.
+2. In Vercel, the configuration in `vercel.json` (`"framework": null`, `"outputDirectory": "."`) automatically configures Vercel to serve the static assets from the root directory.
+3. If overriding in Vercel Project Settings:
+   - Framework Preset: **Other**
+   - Output Directory: **`.`** (or left to `vercel.json`)
+   - Build Command: Override toggled OFF (or leave empty)
+4. Deploy.
 
 ### Option C — Drag & drop
 Vercel Dashboard → **Add New…** → **Project** → upload the unzipped folder.
