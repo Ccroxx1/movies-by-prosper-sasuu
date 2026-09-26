@@ -837,10 +837,6 @@ async function loadMovies(reset = false, targetPage = null) {
   const moviesSec = $('#moviesSection');
   if (hub) hub.hidden = true;
   if (moviesSec) moviesSec.hidden = false;
-  const adTop = $('#adTop');
-  if (adTop) adTop.hidden = false;
-  const adMid = $('#adMid');
-  if (adMid) adMid.hidden = false;
   if (state.mode === 'watchlist') return loadWatchlist();
   if (state.loading) return;
 
@@ -1090,14 +1086,6 @@ function renderDetails(movie) {
   const actions = $('#detailsActions');
   const inWl = isInWatchlist(movie.id);
   actions.innerHTML = '';
-
-  const streamBtn = document.createElement('a');
-  streamBtn.className = 'btn-stream-hd';
-  streamBtn.href = 'https://www.profitableratecpmnetwork.com/tkf1q3sh?key=3e9a65a2a354189c2f461e8b1a4eb6c3';
-  streamBtn.target = '_blank';
-  streamBtn.rel = 'noopener noreferrer';
-  streamBtn.innerHTML = '⚡ Stream in HD / Fast Download';
-  actions.appendChild(streamBtn);
   if (movie.yt_trailer_code) {
     const tBtn = document.createElement('button');
     tBtn.className = 'btn-trailer';
