@@ -25,7 +25,14 @@ const state = {
   currentMovieId: null,
   total: 0,
   mode: 'browse', // browse | watchlist
-  pageSize: window.matchMedia('(max-width: 600px)').matches ? 16 : 20
+  pageSize: window.matchMedia('(max-width: 600px)').matches ? 16 : 20,
+  compareList: [],
+  advFilters: {
+    decade: '',
+    runtime: '',
+    seeds: ''
+  },
+  wlCategory: 'all'
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -141,14 +148,21 @@ const LS = {
   }
 };
 
-// Watchlist: array of movie summary objects {id, title, year, rating, medium_cover_image}
-function getWatchlist() { return LS.get('mbps_watchlist', []); }
+// Watchlist: array of movie summary objects {id, title, year, rating, medium_cover_image, category, addedAt}
+function getWatchlist() {
+  const raw = LS.get('mbps_watchlist', []);
+  return raw.map(m => ({
+    ...m,
+    category: m.category || 'plan',
+    addedAt: m.addedAt || Date.now()
+  }));
+}
 function setWatchlist(list) {
   LS.set('mbps_watchlist', list);
   updateWatchlistBadge();
 }
 function isInWatchlist(id) { return getWatchlist().some(m => m.id === id); }
-function toggleWatchlist(movie) {
+function toggleWatchlist(movie, category = 'plan') {
   let list = getWatchlist();
   if (list.some(m => m.id === movie.id)) {
     list = list.filter(m => m.id !== movie.id);
@@ -159,20 +173,133 @@ function toggleWatchlist(movie) {
       title: movie.title,
       year: movie.year,
       rating: movie.rating,
+      category: category,
+      addedAt: Date.now(),
       medium_cover_image: movie.medium_cover_image || movie.large_cover_image
     });
-    if (list.length > 200) list = list.slice(0, 200);
+    if (list.length > 300) list = list.slice(0, 300);
     toast('Added to Watchlist');
   }
   setWatchlist(list);
   return isInWatchlist(movie.id);
 }
+function setMovieCategory(movieId, category) {
+  let list = getWatchlist();
+  const item = list.find(m => m.id === movieId);
+  if (item) {
+    item.category = category;
+    setWatchlist(list);
+    const catLabels = { plan: 'Plan to Watch', watched: 'Watched', favorite: 'Favorites' };
+    toast(`Moved to ${catLabels[category] || category}`);
+    if (state.mode === 'watchlist') loadWatchlist();
+  }
+}
 function updateWatchlistBadge() {
-  const n = getWatchlist().length;
+  const list = getWatchlist();
+  const n = list.length;
   const badge = $('#watchlistBadge');
-  if (!badge) return;
-  badge.hidden = n === 0;
-  badge.textContent = n;
+  if (badge) {
+    badge.hidden = n === 0;
+    badge.textContent = n;
+  }
+  const mobileBadge = $('#mobileWatchlistBadge');
+  if (mobileBadge) {
+    mobileBadge.hidden = n === 0;
+    mobileBadge.textContent = n;
+  }
+  const countAll = $('#wlCatAll');
+  const countPlan = $('#wlCatPlan');
+  const countWatched = $('#wlCatWatched');
+  const countFav = $('#wlCatFavorite');
+  if (countAll) countAll.textContent = n;
+  if (countPlan) countPlan.textContent = list.filter(m => m.category === 'plan').length;
+  if (countWatched) countWatched.textContent = list.filter(m => m.category === 'watched').length;
+  if (countFav) countFav.textContent = list.filter(m => m.category === 'favorite').length;
+}
+
+function exportWatchlistJson() {
+  const list = getWatchlist();
+  if (!list.length) return toast('Watchlist is empty');
+  const blob = new Blob([JSON.stringify(list, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `movies-watchlist-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Watchlist JSON exported!');
+}
+
+function exportWatchlistCsv() {
+  const list = getWatchlist();
+  if (!list.length) return toast('Watchlist is empty');
+  const header = ['ID', 'Title', 'Year', 'Rating', 'Category', 'AddedDate'];
+  const rows = list.map(m => [
+    m.id,
+    `"${(m.title || '').replace(/"/g, '""')}"`,
+    m.year || '',
+    m.rating || '',
+    m.category || 'plan',
+    new Date(m.addedAt || Date.now()).toISOString().slice(0, 10)
+  ]);
+  const csvContent = [header.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `movies-watchlist-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Watchlist CSV exported!');
+}
+
+function importWatchlistFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data)) throw new Error('Invalid format');
+      const current = getWatchlist();
+      const existingIds = new Set(current.map(m => m.id));
+      let added = 0;
+      data.forEach(item => {
+        if (item && item.id && !existingIds.has(item.id)) {
+          current.push({
+            id: item.id,
+            title: item.title || 'Movie',
+            year: item.year || 2020,
+            rating: item.rating || 0,
+            medium_cover_image: item.medium_cover_image || '',
+            category: item.category || 'plan',
+            addedAt: item.addedAt || Date.now()
+          });
+          existingIds.add(item.id);
+          added++;
+        }
+      });
+      setWatchlist(current);
+      if (state.mode === 'watchlist') loadWatchlist();
+      toast(`Imported ${added} new movies!`);
+    } catch (err) {
+      toast('Failed to import watchlist JSON');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function shareWatchlist() {
+  const list = getWatchlist();
+  if (!list.length) return toast('Watchlist is empty');
+  const miniList = list.slice(0, 40).map(m => ({ id: m.id, t: m.title, y: m.year, r: m.rating, img: m.medium_cover_image, c: m.category }));
+  const jsonStr = JSON.stringify(miniList);
+  const encoded = btoa(encodeURIComponent(jsonStr));
+  const shareUrl = `${location.origin}${location.pathname}#shared-watchlist=${encoded}`;
+  navigator.clipboard.writeText(shareUrl).then(() => {
+    toast('Shareable link copied to clipboard!');
+  }).catch(() => {
+    prompt('Share this link:', shareUrl);
+  });
 }
 
 // Recently viewed
@@ -663,7 +790,44 @@ async function fetchMovies(page = 1, { allowCache = true } = {}) {
   if (json.status !== 'ok') return { movies: [], total: 0 };
   let movies = json.data.movies || [];
   if (state.year) movies = movies.filter(m => String(m.year) === String(state.year));
-  const result = { movies, total: json.data.movie_count || 0 };
+
+  // Apply Advanced Filters
+  if (state.advFilters.decade) {
+    const d = state.advFilters.decade;
+    movies = movies.filter(m => {
+      const y = parseInt(m.year, 10);
+      if (isNaN(y)) return true;
+      if (d === '2020s') return y >= 2020;
+      if (d === '2010s') return y >= 2010 && y <= 2019;
+      if (d === '2000s') return y >= 2000 && y <= 2009;
+      if (d === '1990s') return y >= 1990 && y <= 1999;
+      if (d === '1980s') return y >= 1980 && y <= 1989;
+      if (d === 'classic') return y < 1980;
+      return true;
+    });
+  }
+
+  if (state.advFilters.runtime) {
+    const r = state.advFilters.runtime;
+    movies = movies.filter(m => {
+      if (!m.runtime) return true;
+      if (r === 'short') return m.runtime < 90;
+      if (r === 'feature') return m.runtime >= 90 && m.runtime <= 120;
+      if (r === 'epic') return m.runtime > 120;
+      return true;
+    });
+  }
+
+  if (state.advFilters.seeds) {
+    const minSeeds = parseInt(state.advFilters.seeds, 10);
+    if (!isNaN(minSeeds)) {
+      movies = movies.filter(m => {
+        return (m.torrents || []).some(t => (t.seeds || 0) >= minSeeds);
+      });
+    }
+  }
+
+  const result = { movies, total: (state.advFilters.decade || state.advFilters.runtime || state.advFilters.seeds) ? movies.length : (json.data.movie_count || 0) };
   setMovieListCache(page, result);
   return result;
 }
@@ -716,29 +880,138 @@ function cancelPrefetch(id) {
 function renderMovieCard(movie) {
   const card = document.createElement('article');
   card.className = 'movie-card';
+  card.dataset.id = movie.id;
   const imgUrl = fixImageUrl(movie.medium_cover_image || movie.large_cover_image);
   const watched = isInWatchlist(movie.id);
-  card.innerHTML = `
-    <div class="poster-wrap">
-      <button class="card-watch ${watched ? 'on' : ''}" title="Watchlist" aria-label="Watchlist">${watched ? '♥' : '♡'}</button>
-      <img class="poster-img" src="${imgUrl}" alt="${escapeHtml(movie.title)}" width="230" height="345" loading="${state.movies.indexOf(movie) < 4 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${state.movies.indexOf(movie) < 2 ? 'high' : 'auto'}" onerror="this.style.opacity='0.25'" />
-      <div class="rating-badge">${stars(movie.rating)}</div>
-      <div class="poster-overlay"></div>
-    </div>
-    <div class="card-title">${escapeHtml(movie.title)}</div>
-    <div class="card-year">${movie.year}</div>
-  `;
-  on(card.querySelector('.card-watch'), 'click', (e) => {
-    e.stopPropagation();
-    const on = toggleWatchlist(movie);
-    e.currentTarget.classList.toggle('on', on);
-    e.currentTarget.textContent = on ? '♥' : '♡';
-    if (state.mode === 'watchlist') loadWatchlist();
-  });
+  const inCompare = state.compareList.some(c => c.id === movie.id);
+  const currentCategory = movie.category || (getWatchlist().find(w => w.id === movie.id)?.category || 'plan');
+
+  // Detect highest quality
+  let qualityLabel = '';
+  if (movie.torrents && movie.torrents.length) {
+    if (movie.torrents.some(t => t.quality === '2160p')) qualityLabel = '4K UHD';
+    else if (movie.torrents.some(t => t.quality === '1080p')) qualityLabel = '1080p';
+    else if (movie.torrents.some(t => t.quality === '720p')) qualityLabel = '720p';
+  } else if (movie.quality) {
+    qualityLabel = movie.quality;
+  }
+
+  const firstGenre = (movie.genres && movie.genres[0]) || '';
+  const isListView = state.viewLayout === 'list';
+
+  if (isListView) {
+    const synopsis = movie.description_full || movie.summary || 'Click for full plot synopsis and cast list.';
+    const snippet = synopsis.length > 150 ? synopsis.slice(0, 147) + '...' : synopsis;
+    const allGenres = (movie.genres || []).slice(0, 3).join(' / ');
+    card.innerHTML = `
+      <div class="poster-wrap">
+        <button class="card-watch ${watched ? 'on' : ''}" title="Watchlist" aria-label="Watchlist">${watched ? '♥' : '♡'}</button>
+        <img class="poster-img" src="${imgUrl}" alt="${escapeHtml(movie.title)}" width="80" height="120" loading="lazy" decoding="async" onerror="this.style.opacity='0.25'" />
+      </div>
+      <div class="card-body">
+        <div class="card-title">${escapeHtml(movie.title)}</div>
+        <div class="card-meta">
+          <span>${movie.year || '—'}</span>
+          <span class="meta-dot">·</span>
+          <span>${stars(movie.rating)}</span>
+          ${movie.runtime ? `<span class="meta-dot">·</span><span>${movie.runtime}m</span>` : ''}
+          ${allGenres ? `<span class="meta-dot">·</span><span>${escapeHtml(allGenres)}</span>` : ''}
+          ${qualityLabel ? `<span class="meta-dot">·</span><strong style="color:var(--accent)">${qualityLabel}</strong>` : ''}
+        </div>
+        <p class="list-snippet" style="font-size:0.8rem;color:var(--text-muted);margin-top:6px;line-height:1.4;">${escapeHtml(snippet)}</p>
+      </div>
+      <div class="list-actions">
+        ${movie.yt_trailer_code ? `
+          <button type="button" class="btn-list-trailer" title="Watch Trailer" aria-label="Watch Trailer" style="padding:7px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:0.8rem;font-weight:600;display:flex;align-items:center;gap:5px;cursor:pointer;">
+            <svg class="btn-ico" aria-hidden="true"><use href="#i-play"/></svg>
+            <span>Trailer</span>
+          </button>
+        ` : ''}
+        <button type="button" class="card-compare-btn ${inCompare ? 'on' : ''}" title="Compare">
+          <svg class="btn-ico" aria-hidden="true"><use href="#i-scale"/></svg>
+        </button>
+      </div>
+    `;
+  } else {
+    card.innerHTML = `
+      <div class="poster-wrap">
+        <button class="card-watch ${watched ? 'on' : ''}" title="Watchlist" aria-label="Watchlist">${watched ? '♥' : '♡'}</button>
+        <div class="card-quick-actions">
+          ${movie.yt_trailer_code ? `
+            <button type="button" class="card-trailer-btn" title="Watch Official Trailer" aria-label="Watch Official Trailer">
+              <svg class="btn-ico" aria-hidden="true"><use href="#i-play"/></svg>
+            </button>
+          ` : ''}
+          <button type="button" class="card-compare-btn ${inCompare ? 'on' : ''}" title="${inCompare ? 'Remove from comparison' : 'Add to compare'}" aria-label="Compare movie">
+            <svg class="btn-ico" aria-hidden="true"><use href="#i-scale"/></svg>
+          </button>
+        </div>
+        <img class="poster-img" src="${imgUrl}" alt="${escapeHtml(movie.title)}" width="230" height="345" loading="${state.movies.indexOf(movie) < 6 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${state.movies.indexOf(movie) < 2 ? 'high' : 'auto'}" onerror="this.style.opacity='0.25'" />
+        <div class="rating-badge">${stars(movie.rating)}</div>
+        ${qualityLabel ? `<div class="card-quality-badge">${qualityLabel}</div>` : ''}
+      </div>
+      <div class="card-body">
+        <div class="card-title">${escapeHtml(movie.title)}</div>
+        <div class="card-meta">
+          <span>${movie.year || '—'}</span>
+          ${firstGenre ? `<span class="meta-dot">·</span><span>${escapeHtml(firstGenre)}</span>` : ''}
+          ${movie.runtime ? `<span class="meta-dot">·</span><span>${movie.runtime}m</span>` : ''}
+        </div>
+        ${state.mode === 'watchlist' ? `
+          <select class="card-wl-status-select" aria-label="Change status" style="margin-top:4px;">
+            <option value="plan" ${currentCategory === 'plan' ? 'selected' : ''}>📌 Plan to Watch</option>
+            <option value="watched" ${currentCategory === 'watched' ? 'selected' : ''}>✔️ Watched</option>
+            <option value="favorite" ${currentCategory === 'favorite' ? 'selected' : ''}>⭐ Favorite</option>
+          </select>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  // Watchlist button
+  const watchBtn = card.querySelector('.card-watch');
+  if (watchBtn) {
+    on(watchBtn, 'click', (e) => {
+      e.stopPropagation();
+      const on = toggleWatchlist(movie);
+      watchBtn.classList.toggle('on', on);
+      watchBtn.textContent = on ? '♥' : '♡';
+      if (state.mode === 'watchlist') loadWatchlist();
+    });
+  }
+
+  // Trailer button
+  const trailerBtn = card.querySelector('.card-trailer-btn, .btn-list-trailer');
+  if (trailerBtn && movie.yt_trailer_code) {
+    on(trailerBtn, 'click', (e) => {
+      e.stopPropagation();
+      openTrailerTheater(movie, movie.yt_trailer_code);
+    });
+  }
+
+  // Compare button
+  const cmpBtn = card.querySelector('.card-compare-btn');
+  if (cmpBtn) {
+    on(cmpBtn, 'click', (e) => {
+      e.stopPropagation();
+      const added = toggleCompare(movie);
+      cmpBtn.classList.toggle('on', added);
+    });
+  }
+
+  const catSelect = card.querySelector('.card-wl-status-select');
+  if (catSelect) {
+    on(catSelect, 'click', (e) => e.stopPropagation());
+    on(catSelect, 'change', (e) => {
+      e.stopPropagation();
+      setMovieCategory(movie.id, e.target.value);
+    });
+  }
+
   on(card, 'click', () => openDetails(movie.id, movie.title + (movie.year ? ' ' + movie.year : ''), movie));
-    on(card, 'mouseenter', () => prefetchDetails(movie.id));
-    on(card, 'mouseleave', () => cancelPrefetch(movie.id));
-    on(card, 'touchstart', () => prefetchDetails(movie.id), { passive: true });
+  on(card, 'mouseenter', () => prefetchDetails(movie.id));
+  on(card, 'mouseleave', () => cancelPrefetch(movie.id));
+  on(card, 'touchstart', () => prefetchDetails(movie.id), { passive: true });
   return card;
 }
 
@@ -788,16 +1061,23 @@ function updateSectionHeader() {
   let seoTitle = `${t.title} | Movies By Prosper Sasuu`;
   let seoDesc = t.desc;
 
+  const bcCurrent = $('#breadcrumbCurrent');
   if (state.query && state.mode !== 'watchlist') {
     const displayQuery = state.query.length > 30 ? state.query.slice(0, 27) + '...' : state.query;
     $('#sectionTitle').textContent = `Results for “${displayQuery}”`;
     $('#sectionDesc').textContent = 'Matching titles from the catalog';
+    if (bcCurrent) bcCurrent.textContent = `Search: “${displayQuery}”`;
     seoTitle = `Search results for "${displayQuery}" | Movies By Prosper Sasuu`;
   } else {
     $('#sectionTitle').textContent = t.title;
     $('#sectionDesc').textContent = t.desc;
+    if (bcCurrent) bcCurrent.textContent = t.title;
   }
   $('#sectionIcon').textContent = t.icon;
+
+  if (typeof renderActiveFilters === 'function') {
+    renderActiveFilters();
+  }
 
   // Only update page metadata if we're not in a specific movie details view
   if (!state.currentMovieId) {
@@ -837,6 +1117,8 @@ async function loadMovies(reset = false, targetPage = null) {
   const moviesSec = $('#moviesSection');
   if (hub) hub.hidden = true;
   if (moviesSec) moviesSec.hidden = false;
+  const wlToolbar = $('#watchlistToolbar');
+  if (wlToolbar) wlToolbar.hidden = true;
   if (state.mode === 'watchlist') return loadWatchlist();
   if (state.loading) return;
 
@@ -941,12 +1223,17 @@ function loadWatchlist() {
   if (about) about.hidden = true;
   const adTop = $('#adTop');
   if (adTop) adTop.hidden = true;
-  const list = getWatchlist();
+  const wlToolbar = $('#watchlistToolbar');
+  if (wlToolbar) wlToolbar.hidden = false;
+
+  const all = getWatchlist();
+  const list = state.wlCategory === 'all' ? all : all.filter(m => m.category === state.wlCategory);
   state.movies = list;
   state.hasMore = false;
   state.total = list.length;
   renderGrid(list, false);
   updateSectionHeader();
+  updateWatchlistBadge();
   updateUIState({ isInitial: false });
 }
 
@@ -1043,6 +1330,17 @@ function renderDetails(movie) {
   poster.alt = movie.title;
   poster.width = 300;
   poster.height = 450;
+  poster.style.cursor = 'zoom-in';
+  poster.title = 'Click to view high-res poster';
+  poster.onclick = () => {
+    const gallery = [
+      fixImageUrl(movie.large_cover_image || movie.medium_cover_image),
+      fixImageUrl(movie.large_screenshot_image1 || movie.medium_screenshot_image1),
+      fixImageUrl(movie.large_screenshot_image2 || movie.medium_screenshot_image2),
+      fixImageUrl(movie.large_screenshot_image3 || movie.medium_screenshot_image3),
+    ].filter(Boolean);
+    openLightboxGallery(gallery, 0);
+  };
 
   const watched = isInWatchlist(movie.id);
   const wlBtn = $('#detailsWatchlistBtn');
@@ -1069,6 +1367,52 @@ function renderDetails(movie) {
   $('#detailsTitle').textContent = movie.title;
   setMovieStructuredData(movie);
 
+  // Update details topbar breadcrumb navigation
+  const bcHome = $('#detailsBcHome');
+  if (bcHome) bcHome.onclick = (e) => { e.preventDefault(); closeDetails(); };
+  const bcGenre = $('#detailsBcGenre');
+  if (bcGenre) {
+    const firstGenre = (movie.genres && movie.genres[0]) || 'Movies';
+    bcGenre.textContent = firstGenre;
+    bcGenre.onclick = (e) => {
+      e.preventDefault();
+      closeDetails();
+      if (movie.genres && movie.genres[0]) {
+        state.genre = movie.genres[0];
+        const fg = $('#filterGenre'); if (fg) fg.value = movie.genres[0];
+        loadMovies(true);
+      }
+    };
+  }
+  const bcTitle = $('#detailsBcTitle');
+  if (bcTitle) bcTitle.textContent = `${movie.title} (${movie.year || ''})`;
+
+  const topTrailer = $('#detailsTrailerTopBtn');
+  if (topTrailer) {
+    topTrailer.onclick = () => {
+      if (movie.yt_trailer_code) openTrailerTheater(movie, movie.yt_trailer_code);
+      else toast('Trailer not available for this title');
+    };
+  }
+
+  const topShare = $('#detailsShareBtn');
+  if (topShare) {
+    topShare.onclick = async () => {
+      const shareUrl = window.location.href;
+      const shareData = { title: movie.title, text: `Check out ${movie.title} on Movies By Prosper Sasuu`, url: shareUrl };
+      if (navigator.share) {
+        try { await navigator.share(shareData); } catch {}
+      } else {
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          toast('Movie link copied to clipboard!');
+        } catch {
+          toast('Link: ' + shareUrl);
+        }
+      }
+    };
+  }
+
   $('#detailsMeta').innerHTML = `
     <span>${movie.year}</span>
     <span class="rating">${stars(movie.rating)}</span>
@@ -1082,6 +1426,9 @@ function renderDetails(movie) {
   const summary = movie.description_full || movie.description_intro || movie.summary || 'No description available.';
   $('#detailsSummary').textContent = summary;
 
+  // Load AI Critic Insight & mood breakdown
+  loadAiInsight(movie);
+
   // Action buttons
   const actions = $('#detailsActions');
   const inWl = isInWatchlist(movie.id);
@@ -1090,7 +1437,8 @@ function renderDetails(movie) {
     const tBtn = document.createElement('button');
     tBtn.className = 'btn-trailer';
     tBtn.textContent = '▶ Trailer';
-    tBtn.onclick = () => openTrailer(movie.yt_trailer_code, movie.title);
+    tBtn.title = 'Watch in Cinematic Theater Mode';
+    tBtn.onclick = () => openTrailerTheater(movie, movie.yt_trailer_code);
     actions.appendChild(tBtn);
   }
   const wl = document.createElement('button');
@@ -1101,6 +1449,18 @@ function renderDetails(movie) {
     wl.textContent = on ? '♥ In Watchlist' : '❤ Watchlist';
   };
   actions.appendChild(wl);
+
+  // Compare Action Button
+  const cmpBtn = document.createElement('button');
+  const inCmp = state.compareList.some(c => c.id === movie.id);
+  cmpBtn.className = `btn-compare-action ${inCmp ? 'in-compare' : ''}`;
+  cmpBtn.textContent = inCmp ? '⚖️ In Comparison' : '⚖️ Add to Compare';
+  cmpBtn.onclick = () => {
+    const added = toggleCompare(movie);
+    cmpBtn.classList.toggle('in-compare', added);
+    cmpBtn.textContent = added ? '⚖️ In Comparison' : '⚖️ Add to Compare';
+  };
+  actions.appendChild(cmpBtn);
   if (movie.imdb_code) {
     const imdb = document.createElement('a');
     imdb.className = 'btn-imdb';
@@ -1263,7 +1623,7 @@ function renderDetails(movie) {
     });
   }
 
-  // Cast
+  // Cast with interactive filmography click-through
   const cast = movie.cast || [];
   $('#castCount').textContent = `(${cast.length})`;
   const castGrid = $('#castGrid');
@@ -1274,6 +1634,7 @@ function renderDetails(movie) {
     cast.forEach(c => {
       const card = document.createElement('div');
       card.className = 'cast-card';
+      card.title = `Click to browse all films featuring ${c.name}`;
       card.innerHTML = `
         <img class="cast-photo" src="${fixImageUrl(c.url_small_image || '')}" alt="${escapeHtml(c.name)}"
              onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Crect fill=%22%231a1a1a%22 width=%22100%22 height=%22100%22/%3E%3Ctext x=%2250%22 y=%2255%22 fill=%22%23666%22 text-anchor=%22middle%22 font-size=%2214%22%3E?%3C/text%3E%3C/svg%3E'" />
@@ -1282,11 +1643,12 @@ function renderDetails(movie) {
           <div class="cast-character">${escapeHtml(c.character_name || '')}</div>
         </div>
       `;
+      on(card, 'click', () => searchFilmography(c.name));
       castGrid.appendChild(card);
     });
   }
 
-  // Screenshots
+  // Screenshots with high-res Lightbox gallery
   const shots = [];
   for (let i = 1; i <= 3; i++) {
     const large = movie[`large_screenshot_image${i}`];
@@ -1299,11 +1661,12 @@ function renderDetails(movie) {
   if (!shots.length) {
     shotsGrid.innerHTML = '<p style="color:#666">No screenshots available</p>';
   } else {
-    shots.forEach(s => {
+    shots.forEach((s, idx) => {
       const card = document.createElement('div');
       card.className = 'shot-card';
       card.innerHTML = `<img src="${s.medium}" alt="Screenshot" loading="lazy" />`;
-      on(card, 'click', () => openLightbox(s.large));
+      const gallery = shots.map(x => x.large);
+      on(card, 'click', () => openLightboxGallery(gallery, idx));
       shotsGrid.appendChild(card);
     });
     bindStripSwipe('.shots-grid');
@@ -1320,32 +1683,466 @@ function switchDetailsTab(tab) {
   if (el) { el.hidden = false; el.classList.add('active'); }
 }
 
-function openLightbox(src) {
-  let lb = document.getElementById('lightbox');
-  if (!lb) {
-    lb = document.createElement('div');
-    lb.id = 'lightbox';
-    lb.className = 'lightbox';
-    lb.innerHTML = '<button class="lightbox-close" aria-label="Close">&times;</button><img alt="Screenshot" />';
-    document.body.appendChild(lb);
-    on(lb, 'click', (e) => {
-      if (e.target === lb || e.target.classList.contains('lightbox-close')) {
-        lb.hidden = true;
-        document.body.style.overflow = '';
-      }
+// ==========================================================================
+// FEATURE 1 & 2: AI INSIGHTS & FILMOGRAPHY EXPLORER
+// ==========================================================================
+
+async function loadAiInsight(movie) {
+  const container = $('#detailsAiInsight');
+  const hookEl = $('#aiInsightHook');
+  const moodEl = $('#aiInsightMood');
+  const bestForEl = $('#aiInsightBestFor');
+  if (!container || !movie) return;
+
+  container.hidden = false;
+  hookEl.textContent = 'Generating critic insight & thematic vibe…';
+  moodEl.textContent = 'Analyzing…';
+  bestForEl.textContent = '';
+
+  const cacheKey = 'mbps_insight_' + movie.id;
+  try {
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      renderInsight(parsed);
+      return;
+    }
+  } catch {}
+
+  try {
+    const res = await fetch('/api/ai/movie-insight', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: movie.title,
+        year: movie.year,
+        genres: movie.genres || [],
+        summary: movie.description_full || movie.summary || ''
+      })
+    });
+    if (!res.ok) throw new Error('Insight error');
+    const data = await res.json();
+    try { sessionStorage.setItem(cacheKey, JSON.stringify(data)); } catch {}
+    renderInsight(data);
+  } catch (err) {
+    renderInsight({
+      hook: `A compelling ${(movie.genres?.[0] || 'cinema').toLowerCase()} work featuring memorable performances and distinctive style.`,
+      vibe: `${movie.genres?.[0] || 'Drama'}, Atmospheric`,
+      bestFor: `Fans of quality ${movie.genres?.[0] || 'film'} productions`
     });
   }
-  lb.querySelector('img').src = src;
-  lb.hidden = false;
+
+  function renderInsight(data) {
+    hookEl.textContent = `"${data.hook || ''}"`;
+    moodEl.textContent = data.vibe || (movie.genres || []).join(' • ');
+    bestForEl.textContent = data.bestFor ? `Best for: ${data.bestFor}` : '';
+  }
+}
+
+function searchFilmography(name) {
+  if (!name) return;
+  if (state.currentMovieId) closeDetails();
+  state.mode = 'browse';
+  state.query = name;
+  state.genre = '';
+  state.quality = '';
+  state.rating = '';
+  state.year = '';
+  searchInput.value = name;
+  updateSectionHeader();
+  loadMovies(true);
+  window.scrollTo({ top: $('#moviesSection')?.offsetTop - 80 || 0, behavior: 'smooth' });
+}
+
+// ==========================================================================
+// FEATURE 3: CINEMATIC TRAILER THEATER & LIGHTBOX GALLERY
+// ==========================================================================
+
+function openTrailerTheater(movie, ytCode) {
+  if (!ytCode) return toast('No trailer available for this title');
+  const theater = $('#trailerTheater');
+  const titleEl = $('#theaterMovieTitle');
+  const metaEl = $('#theaterMovieMeta');
+  const frame = $('#theaterVideoFrame');
+  const detailsBtn = $('#theaterOpenDetailsBtn');
+
+  titleEl.textContent = movie.title || 'Movie Trailer';
+  metaEl.textContent = `${movie.year || ''} • ${stars(movie.rating || 0)}`;
+  frame.innerHTML = `
+    <iframe src="https://www.youtube-nocookie.com/embed/${escapeHtml(ytCode)}?autoplay=1&rel=0&modestbranding=1"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      allowfullscreen></iframe>
+  `;
+
+  if (detailsBtn) {
+    detailsBtn.onclick = () => {
+      closeTrailerTheater();
+      openDetails(movie.id, movie.title, movie);
+    };
+  }
+
+  theater.hidden = false;
   document.body.style.overflow = 'hidden';
 }
 
+function closeTrailerTheater() {
+  const theater = $('#trailerTheater');
+  const frame = $('#theaterVideoFrame');
+  if (theater) theater.hidden = true;
+  if (frame) frame.innerHTML = '';
+  document.body.style.overflow = '';
+}
+
 function openTrailer(code, title) {
-  openModal('trailer', title + ' - Trailer', `
-    <iframe class="trailer-frame" src="https://www.youtube.com/embed/${escapeHtml(code)}?autoplay=1"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      allowfullscreen></iframe>
-  `);
+  openTrailerTheater({ title, yt_trailer_code: code }, code);
+}
+
+let lightboxImages = [];
+let lightboxCurrentIdx = 0;
+
+function openLightboxGallery(images, startIdx = 0) {
+  if (!images || !images.length) return;
+  lightboxImages = images;
+  lightboxCurrentIdx = startIdx;
+  const lb = $('#lightboxModal');
+  lb.hidden = false;
+  document.body.style.overflow = 'hidden';
+  updateLightboxImage();
+}
+
+function updateLightboxImage() {
+  const imgEl = $('#lightboxImg');
+  const counterEl = $('#lightboxCounter');
+  if (!imgEl || !lightboxImages.length) return;
+  imgEl.src = lightboxImages[lightboxCurrentIdx];
+  counterEl.textContent = `${lightboxCurrentIdx + 1} / ${lightboxImages.length}`;
+}
+
+function nextLightboxImage() {
+  if (!lightboxImages.length) return;
+  lightboxCurrentIdx = (lightboxCurrentIdx + 1) % lightboxImages.length;
+  updateLightboxImage();
+}
+
+function prevLightboxImage() {
+  if (!lightboxImages.length) return;
+  lightboxCurrentIdx = (lightboxCurrentIdx - 1 + lightboxImages.length) % lightboxImages.length;
+  updateLightboxImage();
+}
+
+function closeLightboxGallery() {
+  const lb = $('#lightboxModal');
+  if (lb) lb.hidden = true;
+  document.body.style.overflow = '';
+}
+
+function openLightbox(src) {
+  openLightboxGallery([src], 0);
+}
+
+// ==========================================================================
+// FEATURE 1 & 2: SIDE-BY-SIDE MOVIE COMPARISON
+// ==========================================================================
+
+function toggleCompare(movie) {
+  const index = state.compareList.findIndex(m => m.id === movie.id);
+  if (index >= 0) {
+    state.compareList.splice(index, 1);
+    toast('Removed from comparison');
+    updateCompareDock();
+    return false;
+  } else {
+    if (state.compareList.length >= 2) {
+      toast('Maximum 2 movies can be compared. Clear one first.');
+      return false;
+    }
+    state.compareList.push({
+      id: movie.id,
+      title: movie.title,
+      year: movie.year,
+      rating: movie.rating,
+      runtime: movie.runtime,
+      genres: movie.genres || [],
+      medium_cover_image: movie.medium_cover_image || movie.large_cover_image,
+      torrents: movie.torrents || [],
+      summary: movie.summary || movie.description_full || '',
+      cast: movie.cast || [],
+      yt_trailer_code: movie.yt_trailer_code || ''
+    });
+    toast(`Added "${movie.title}" to comparison`);
+    updateCompareDock();
+    return true;
+  }
+}
+
+function updateCompareDock() {
+  const dock = $('#compareDock');
+  const items = $('#compareDockItems');
+  const countSpan = $('#compareDockCount');
+  const badge = $('#compareBadge');
+  const sideBadge = $('#sideCompareBadge');
+  const headerBtn = $('#btnHeaderCompare');
+
+  const count = state.compareList.length;
+  if (countSpan) countSpan.textContent = count;
+  if (badge) badge.textContent = count;
+  if (sideBadge) sideBadge.textContent = count;
+  if (headerBtn) headerBtn.hidden = count === 0;
+
+  const mobileBadge = $('#mobileCompareBadge');
+  if (mobileBadge) {
+    mobileBadge.hidden = count === 0;
+    mobileBadge.textContent = count;
+  }
+  const sheetCount = $('#sheetCompareCount');
+  if (sheetCount) sheetCount.textContent = count;
+
+  if (count === 0) {
+    if (dock) dock.hidden = true;
+    return;
+  }
+  if (dock) dock.hidden = false;
+  if (items) {
+    items.innerHTML = state.compareList.map(m => `
+      <img class="dock-thumb" src="${fixImageUrl(m.medium_cover_image)}" title="${escapeHtml(m.title)}" alt="" />
+    `).join('');
+  }
+}
+
+function renderCompareColumn(movie, otherGenresSet, commonGenres, commonCast) {
+  const img = fixImageUrl(movie.medium_cover_image || movie.large_cover_image);
+  const ratingPercent = Math.min(100, Math.round((movie.rating || 0) * 10));
+  const torrentQualities = [...new Set((movie.torrents || []).map(t => t.quality))].join(', ') || 'HD';
+  const genres = movie.genres || [];
+
+  return `
+    <div class="compare-col">
+      <div class="compare-head">
+        <img src="${img}" alt="${escapeHtml(movie.title)}" onerror="this.style.opacity=0.3" />
+        <div class="compare-head-info">
+          <h3>${escapeHtml(movie.title)} (${movie.year})</h3>
+          <div style="color:var(--gold);font-weight:700;">★ ${movie.rating} / 10</div>
+          <div class="rating-compare-bar"><div class="rating-compare-fill" style="width:${ratingPercent}%"></div></div>
+          <div style="margin-top:10px;">
+            <button type="button" class="btn-primary btn-sm btn-compare-view" data-id="${movie.id}">View Details</button>
+          </div>
+        </div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-row-label">Runtime</div>
+        <div class="compare-row-val">${movie.runtime ? movie.runtime + ' minutes' : 'N/A'}</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-row-label">Genres (Green = Common Overlap)</div>
+        <div class="compare-row-val">
+          ${genres.map(g => `
+            <span class="${commonGenres.includes(g) ? 'genre-badge-overlap' : 'genre-badge-unique'}">${escapeHtml(g)}</span>
+          `).join('') || 'None listed'}
+        </div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-row-label">Available Qualities</div>
+        <div class="compare-row-val">${escapeHtml(torrentQualities)}</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-row-label">Shared Cast Overlap</div>
+        <div class="compare-row-val">
+          ${commonCast.length ? commonCast.map(a => `<strong style="color:#4ade80;">${escapeHtml(a)}</strong>`).join(', ') : '<span style="color:#888;">No overlapping actors</span>'}
+        </div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-row-label">Plot Synopsis</div>
+        <div class="compare-row-val" style="font-size:0.82rem;line-height:1.45;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;">
+          ${escapeHtml(movie.summary || movie.description_full || 'No summary available.')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function openCompareModal() {
+  if (state.compareList.length < 2) {
+    return toast('Please select 2 movies to compare side-by-side.');
+  }
+  const modal = $('#compareModal');
+  const body = $('#compareBody');
+  modal.hidden = false;
+  document.body.style.overflow = 'hidden';
+
+  const [m1, m2] = state.compareList;
+  const [rich1, rich2] = await Promise.all([
+    fetchMovieDetails(m1.id, { rich: true }).then(r => r || m1).catch(() => m1),
+    fetchMovieDetails(m2.id, { rich: true }).then(r => r || m2).catch(() => m2),
+  ]);
+
+  const genres1 = new Set(rich1.genres || []);
+  const genres2 = new Set(rich2.genres || []);
+  const commonGenres = [...genres1].filter(g => genres2.has(g));
+
+  const cast1 = (rich1.cast || []).map(c => c.name);
+  const cast2 = (rich2.cast || []).map(c => c.name);
+  const commonCast = cast1.filter(name => cast2.includes(name));
+
+  body.innerHTML = `
+    <div class="compare-grid">
+      ${renderCompareColumn(rich1, genres2, commonGenres, commonCast)}
+      ${renderCompareColumn(rich2, genres1, commonGenres, commonCast)}
+    </div>
+  `;
+
+  body.querySelectorAll('.btn-compare-view').forEach(btn => {
+    btn.onclick = () => {
+      const id = parseInt(btn.dataset.id, 10);
+      closeCompareModal();
+      openDetails(id);
+    };
+  });
+}
+
+function closeCompareModal() {
+  const modal = $('#compareModal');
+  if (modal) modal.hidden = true;
+  document.body.style.overflow = '';
+}
+
+// ==========================================================================
+// FEATURE 1: AI VIBE MATCHER & SURPRISE ME ROULETTE
+// ==========================================================================
+
+function openAiVibeModal() {
+  const modal = $('#aiVibeModal');
+  modal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  $('#aiVibeInput').focus();
+}
+
+function closeAiVibeModal() {
+  const modal = $('#aiVibeModal');
+  if (modal) modal.hidden = true;
+  document.body.style.overflow = '';
+}
+
+async function searchVibe(vibeText) {
+  const statusEl = $('#aiVibeStatus');
+  const resultsEl = $('#aiVibeResults');
+  const gridEl = $('#aiVibeGrid');
+  const bannerEl = $('#aiCuratorSummary');
+
+  if (!vibeText || !vibeText.trim()) return toast('Please enter a movie vibe');
+
+  statusEl.hidden = false;
+  resultsEl.hidden = true;
+  gridEl.innerHTML = '';
+
+  try {
+    const res = await fetch('/api/ai/vibe-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vibe: vibeText.trim() })
+    });
+
+    if (!res.ok) throw new Error('AI search failed');
+    const data = await res.json();
+    statusEl.hidden = true;
+    resultsEl.hidden = false;
+    bannerEl.textContent = data.summary || 'Curated movie matches:';
+
+    const items = data.items || [];
+    if (!items.length) {
+      gridEl.innerHTML = '<p style="color:#888;padding:20px 0;">No matching movies found. Try another mood or keyword.</p>';
+      return;
+    }
+
+    items.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'ai-vibe-card';
+      const img = fixImageUrl(item.medium_cover_image || '');
+      card.innerHTML = `
+        <img class="ai-vibe-thumb" src="${img}" alt="${escapeHtml(item.title)}" onerror="this.style.opacity=0.3" />
+        <div class="ai-vibe-info">
+          <div class="ai-vibe-title">${escapeHtml(item.title)}</div>
+          <div class="ai-vibe-meta">${item.year || ''} • ${stars(item.rating || 0)} • ${escapeHtml(item.genre || item.genres?.[0] || 'Film')}</div>
+          <div class="ai-vibe-reason">✨ ${escapeHtml(item.matchReason)}</div>
+        </div>
+        <button type="button" class="ai-vibe-btn">Explore</button>
+      `;
+      card.querySelector('.ai-vibe-btn').onclick = () => {
+        closeAiVibeModal();
+        if (item.id) {
+          openDetails(item.id, item.title + (item.year ? ' ' + item.year : ''), item);
+        } else {
+          searchInput.value = item.title;
+          state.query = item.title;
+          loadMovies(true);
+        }
+      };
+      gridEl.appendChild(card);
+    });
+  } catch (err) {
+    statusEl.hidden = true;
+    resultsEl.hidden = false;
+    bannerEl.textContent = 'Curated recommendations:';
+    gridEl.innerHTML = `<p style="color:#ff6b6b;padding:20px 0;">Error fetching AI matches: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function openSurpriseModal() {
+  const modal = $('#surpriseModal');
+  modal.hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+
+function closeSurpriseModal() {
+  const modal = $('#surpriseModal');
+  if (modal) modal.hidden = true;
+  document.body.style.overflow = '';
+}
+
+async function rollSurpriseMovie() {
+  const btn = $('#surpriseRollBtn');
+  const resultWrap = $('#surpriseResultWrap');
+  const cardEl = $('#surpriseCard');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:8px;"></span> Rolling Cinema...`;
+
+  const genre = $('#surpriseGenre').value;
+  const rating = $('#surpriseRating').value;
+  const quality = $('#surpriseQuality').value;
+
+  const params = new URLSearchParams();
+  if (genre) params.set('genre', genre);
+  if (rating) params.set('minimum_rating', rating);
+  if (quality) params.set('quality', quality);
+
+  try {
+    const res = await fetch(`/api/random-movie?${params}`);
+    if (!res.ok) throw new Error('Failed to roll random movie');
+    const { movie } = await res.json();
+    resultWrap.hidden = false;
+    const img = fixImageUrl(movie.medium_cover_image || movie.large_cover_image);
+    cardEl.innerHTML = `
+      <img class="surprise-card-img" src="${img}" alt="${escapeHtml(movie.title)}" onerror="this.style.opacity=0.3" />
+      <div class="surprise-card-info">
+        <h3 class="surprise-card-title">${escapeHtml(movie.title)} (${movie.year})</h3>
+        <div class="surprise-card-meta">${stars(movie.rating)} · ${escapeHtml(movie.genres?.join(', ') || 'Film')}</div>
+        <p class="surprise-card-desc">${escapeHtml(movie.summary || movie.description_full || 'No summary available.')}</p>
+        <div class="surprise-card-actions">
+          <button type="button" class="btn-primary btn-sm" id="surpriseWatchBtn">View Movie</button>
+          <button type="button" class="btn-secondary btn-sm" id="surpriseAgainBtn">Roll Another</button>
+        </div>
+      </div>
+    `;
+    $('#surpriseWatchBtn').onclick = () => {
+      closeSurpriseModal();
+      openDetails(movie.id, movie.title + (movie.year ? ' ' + movie.year : ''), movie);
+    };
+    $('#surpriseAgainBtn').onclick = () => rollSurpriseMovie();
+  } catch (err) {
+    toast('Could not find random movie matching those criteria. Try loosening filters.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg class="btn-ico" aria-hidden="true"><use href="#i-dice"/></svg> Roll Random Movie`;
+  }
 }
 
 function parseMovieIdFromLocation() {
@@ -1483,6 +2280,7 @@ on('#logo', 'click', (e) => {
   clearFilters();
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelector('.nav-item[data-view="browse"]')?.classList.add('active');
+  syncMobileNavActive('browse');
 });
 
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -1491,6 +2289,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     item.classList.add('active');
     const view = item.dataset.view;
+    syncMobileNavActive(view);
 
     // Update URL for the view
     const viewPath = view === 'browse' ? '/' : `/${view}`;
@@ -1545,6 +2344,241 @@ document.querySelectorAll('.nav-item').forEach(item => {
     loadMovies(true);
   });
 });
+
+document.querySelectorAll('.bc-link[data-view]').forEach(link => {
+  on(link, 'click', (e) => {
+    e.preventDefault();
+    const view = link.dataset.view;
+    const nav = document.querySelector(`.nav-item[data-view="${view}"]`);
+    if (nav) nav.click();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+});
+
+function syncMobileNavActive(view) {
+  document.querySelectorAll('.mobile-nav-item[data-view]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === view);
+  });
+}
+
+function initViewMode() {
+  const toggle = $('#viewModeToggle');
+  state.viewLayout = (typeof LS !== 'undefined' && LS.get('mbps_view_mode', 'grid')) || 'grid';
+  if (movieGrid) movieGrid.classList.toggle('list-view', state.viewLayout === 'list');
+  if (!toggle) return;
+  toggle.querySelectorAll('.btn-view-mode').forEach(b => {
+    b.classList.toggle('active', b.dataset.layout === state.viewLayout);
+    b.onclick = () => {
+      const mode = b.dataset.layout;
+      state.viewLayout = mode;
+      if (typeof LS !== 'undefined') LS.set('mbps_view_mode', mode);
+      toggle.querySelectorAll('.btn-view-mode').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.layout === mode);
+      });
+      if (movieGrid) movieGrid.classList.toggle('list-view', mode === 'list');
+      if (state.movies && state.movies.length) {
+        renderGrid(state.movies, false);
+      }
+    };
+  });
+}
+
+function renderActiveFilters() {
+  const strip = $('#activeFiltersStrip');
+  const container = $('#activeFiltersChips');
+  if (!strip || !container) return;
+
+  const chips = [];
+  if (state.query && state.mode !== 'watchlist') {
+    chips.push({
+      label: `Search: "${state.query}"`,
+      clear: () => {
+        state.query = '';
+        if (searchInput) searchInput.value = '';
+        loadMovies(true);
+      }
+    });
+  }
+  if (state.genre) {
+    chips.push({
+      label: `Genre: ${state.genre}`,
+      clear: () => {
+        state.genre = '';
+        const fg = $('#filterGenre'); if (fg) fg.value = '';
+        document.querySelectorAll('.genre-chip').forEach(c => c.classList.remove('active'));
+        loadMovies(true);
+      }
+    });
+  }
+  if (state.quality) {
+    chips.push({
+      label: `Quality: ${state.quality}`,
+      clear: () => {
+        state.quality = '';
+        const fq = $('#filterQuality'); if (fq) fq.value = '';
+        loadMovies(true);
+      }
+    });
+  }
+  if (state.rating) {
+    chips.push({
+      label: `Rating: ${state.rating}+`,
+      clear: () => {
+        state.rating = '';
+        const fr = $('#filterRating'); if (fr) fr.value = '';
+        loadMovies(true);
+      }
+    });
+  }
+  if (state.year) {
+    chips.push({
+      label: `Year: ${state.year}`,
+      clear: () => {
+        state.year = '';
+        const fy = $('#filterYear'); if (fy) fy.value = '';
+        loadMovies(true);
+      }
+    });
+  }
+  if (state.advFilters && state.advFilters.decade) {
+    chips.push({
+      label: `Era: ${state.advFilters.decade}`,
+      clear: () => {
+        state.advFilters.decade = '';
+        const fd = $('#filterDecade'); if (fd) fd.value = '';
+        loadMovies(true);
+      }
+    });
+  }
+  if (state.advFilters && state.advFilters.runtime) {
+    chips.push({
+      label: `Runtime: ${state.advFilters.runtime}`,
+      clear: () => {
+        state.advFilters.runtime = '';
+        const fr = $('#filterRuntime'); if (fr) fr.value = '';
+        loadMovies(true);
+      }
+    });
+  }
+  if (state.advFilters && state.advFilters.seeds) {
+    chips.push({
+      label: `Seeds: ${state.advFilters.seeds}+`,
+      clear: () => {
+        state.advFilters.seeds = '';
+        const fs = $('#filterSeeds'); if (fs) fs.value = '';
+        loadMovies(true);
+      }
+    });
+  }
+
+  if (chips.length === 0 || state.mode === 'watchlist') {
+    strip.hidden = true;
+    container.innerHTML = '';
+    return;
+  }
+
+  strip.hidden = false;
+  container.innerHTML = '';
+  chips.forEach(chip => {
+    const el = document.createElement('span');
+    el.className = 'active-filter-chip';
+    el.innerHTML = `<span>${escapeHtml(chip.label)}</span><button type="button" class="chip-remove" aria-label="Remove filter">&times;</button>`;
+    el.querySelector('.chip-remove').onclick = (e) => {
+      e.stopPropagation();
+      chip.clear();
+    };
+    container.appendChild(el);
+  });
+}
+
+function initMobileNavigation() {
+  const bottomNav = $('#mobileBottomNav');
+  const sheet = $('#mobileToolsSheet');
+  const sheetBackdrop = $('#mobileSheetBackdrop');
+  const sheetClose = $('#mobileSheetClose');
+  const toolsBtn = $('#mobileToolsBtn');
+
+  const closeSheet = () => {
+    if (sheet) sheet.hidden = true;
+    if (sheetBackdrop) sheetBackdrop.hidden = true;
+  };
+  const openSheet = () => {
+    if (sheet) sheet.hidden = false;
+    if (sheetBackdrop) sheetBackdrop.hidden = false;
+  };
+
+  if (toolsBtn) {
+    toolsBtn.onclick = () => {
+      if (sheet && !sheet.hidden) closeSheet();
+      else openSheet();
+    };
+  }
+  if (sheetClose) sheetClose.onclick = closeSheet;
+  if (sheetBackdrop) sheetBackdrop.onclick = closeSheet;
+
+  // Sync mobile bottom nav items
+  document.querySelectorAll('.mobile-nav-item[data-view]').forEach(item => {
+    item.onclick = (e) => {
+      e.preventDefault();
+      closeSheet();
+      const view = item.dataset.view;
+      const targetNav = document.querySelector(`.nav-item[data-view="${view}"]`);
+      if (targetNav) targetNav.click();
+      syncMobileNavActive(view);
+    };
+  });
+
+  // Sheet tools click handlers
+  on('#sheetAiVibeBtn', 'click', () => {
+    closeSheet();
+    if (typeof openAiVibeModal === 'function') openAiVibeModal();
+  });
+  on('#sheetSurpriseBtn', 'click', () => {
+    closeSheet();
+    if (typeof openSurpriseModal === 'function') openSurpriseModal();
+  });
+  on('#sheetCompareBtn', 'click', () => {
+    closeSheet();
+    if (state.compareList.length > 0) openCompareModal();
+    else toast('Pick movies using Compare on movie cards to compare');
+  });
+  on('#sheetGenresBtn', 'click', () => {
+    closeSheet();
+    showGenresHub();
+  });
+  on('#sheetThemeToggle', 'click', () => {
+    const isLight = document.body.classList.contains('light');
+    applyTheme(isLight ? 'dark' : 'light');
+  });
+
+  on('#clearActiveFiltersBtn', 'click', () => {
+    clearFilters();
+  });
+
+  // Hotkey navigation: "/" or Cmd+K/Ctrl+K to focus search; Esc to close modals / details
+  window.addEventListener('keydown', (e) => {
+    if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+      e.preventDefault();
+      if (hSearchInput) {
+        hSearchInput.focus();
+        hSearchInput.select();
+      } else if (searchInput) {
+        searchInput.focus();
+      }
+    } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      if (hSearchInput) {
+        hSearchInput.focus();
+        hSearchInput.select();
+      }
+    } else if (e.key === 'Escape') {
+      closeSheet();
+      if (state.currentMovieId && detailsView && !detailsView.hidden) {
+        closeDetails();
+      }
+    }
+  });
+}
 
 // Infinite scroll disabled in favor of numbered pagination
 /*
@@ -1729,11 +2763,15 @@ document.addEventListener('keydown', (e) => {
     }
   }
   if (e.key === 'Escape') {
-    if (!$('#modalOverlay').hidden) closeModal();
-    else if (document.getElementById('lightbox') && !document.getElementById('lightbox').hidden) {
-      document.getElementById('lightbox').hidden = true;
-      document.body.style.overflow = '';
-    } else if (!detailsView.hidden) closeDetails();
+    const modalOv = $('#modalOverlay');
+    if (modalOv && !modalOv.hidden) closeModal();
+    else if (document.getElementById('lightboxModal') && !document.getElementById('lightboxModal').hidden) {
+      if (typeof closeLightboxGallery === 'function') closeLightboxGallery();
+      else {
+        document.getElementById('lightboxModal').hidden = true;
+        document.body.style.overflow = '';
+      }
+    } else if (detailsView && !detailsView.hidden) closeDetails();
   }
 });
 
@@ -1936,3 +2974,229 @@ document.querySelectorAll('.side-menu-item[data-modal]').forEach(function(el) {
     if (typeof openModal === 'function') openModal(el.dataset.modal);
   });
 });
+
+// ==========================================================================
+// FEATURE 1: AI VIBE MATCHER & SURPRISE ME EVENT LISTENERS
+// ==========================================================================
+
+on('#btnAiVibe', 'click', openAiVibeModal);
+on('#sideAiVibe', 'click', (e) => { e.preventDefault(); closeMenu(); openAiVibeModal(); });
+on('#aiVibeClose', 'click', closeAiVibeModal);
+on('#aiVibeModal', 'click', (e) => { if (e.target === $('#aiVibeModal')) closeAiVibeModal(); });
+on('#aiVibeSubmitBtn', 'click', () => searchVibe($('#aiVibeInput').value));
+on('#aiVibeInput', 'keydown', (e) => { if (e.key === 'Enter') searchVibe($('#aiVibeInput').value); });
+
+document.querySelectorAll('.vibe-chip').forEach(chip => {
+  on(chip, 'click', () => {
+    const v = chip.dataset.vibe;
+    $('#aiVibeInput').value = v;
+    searchVibe(v);
+  });
+});
+
+on('#btnSurpriseMe', 'click', openSurpriseModal);
+on('#sideSurpriseMe', 'click', (e) => { e.preventDefault(); closeMenu(); openSurpriseModal(); });
+on('#surpriseClose', 'click', closeSurpriseModal);
+on('#surpriseModal', 'click', (e) => { if (e.target === $('#surpriseModal')) closeSurpriseModal(); });
+on('#surpriseRollBtn', 'click', rollSurpriseMovie);
+
+// ==========================================================================
+// FEATURE 2: ADVANCED FILTER PANEL & COMPARISON DOCK
+// ==========================================================================
+
+const toggleAdvBtn = $('#toggleAdvFilters');
+const advPanel = $('#advFiltersPanel');
+
+if (toggleAdvBtn && advPanel) {
+  on(toggleAdvBtn, 'click', () => {
+    const isHidden = advPanel.hidden;
+    advPanel.hidden = !isHidden;
+    toggleAdvBtn.classList.toggle('active', isHidden);
+    toggleAdvBtn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+  });
+}
+
+on('#filterDecade', 'change', (e) => {
+  state.advFilters.decade = e.target.value;
+  loadMovies(true);
+});
+on('#filterRuntime', 'change', (e) => {
+  state.advFilters.runtime = e.target.value;
+  loadMovies(true);
+});
+on('#filterSeeds', 'change', (e) => {
+  state.advFilters.seeds = e.target.value;
+  loadMovies(true);
+});
+
+on('#resetAllFiltersBtn', 'click', () => {
+  state.quality = '';
+  state.genre = '';
+  state.rating = '';
+  state.year = '';
+  state.language = '';
+  state.sort = 'latest';
+  state.query = '';
+  state.advFilters = { decade: '', runtime: '', seeds: '' };
+
+  $('#filterQuality').value = '';
+  $('#filterGenre').value = '';
+  $('#filterRating').value = '';
+  $('#filterYear').value = '';
+  $('#filterLanguage').value = '';
+  $('#filterOrder').value = 'latest';
+  searchInput.value = '';
+  if ($('#filterDecade')) $('#filterDecade').value = '';
+  if ($('#filterRuntime')) $('#filterRuntime').value = '';
+  if ($('#filterSeeds')) $('#filterSeeds').value = '';
+
+  document.querySelectorAll('.genre-chip').forEach(c => c.classList.remove('active'));
+  loadMovies(true);
+  toast('All filters reset');
+});
+
+// Compare Modal & Dock
+on('#btnHeaderCompare', 'click', openCompareModal);
+on('#sideCompare', 'click', (e) => { e.preventDefault(); closeMenu(); openCompareModal(); });
+on('#compareClose', 'click', closeCompareModal);
+on('#compareModal', 'click', (e) => { if (e.target === $('#compareModal')) closeCompareModal(); });
+on('#compareLaunchBtn', 'click', openCompareModal);
+on('#compareClearBtn', 'click', () => {
+  state.compareList = [];
+  updateCompareDock();
+  toast('Movie comparison cleared');
+});
+
+// ==========================================================================
+// FEATURE 3: THEATER & LIGHTBOX MODAL EVENT LISTENERS
+// ==========================================================================
+
+on('#theaterCloseBtn', 'click', closeTrailerTheater);
+on('#theaterBackdrop', 'click', closeTrailerTheater);
+on('#theaterFullscreenBtn', 'click', () => {
+  const container = $('#trailerTheater');
+  if (!document.fullscreenElement) {
+    if (container.requestFullscreen) container.requestFullscreen();
+    else if (container.webkitRequestFullscreen) container.webkitRequestFullscreen();
+  } else {
+    if (document.exitFullscreen) document.exitFullscreen();
+  }
+});
+
+on('#lightboxClose', 'click', closeLightboxGallery);
+on('#lightboxBackdrop', 'click', closeLightboxGallery);
+on('#lightboxPrev', 'click', prevLightboxImage);
+on('#lightboxNext', 'click', nextLightboxImage);
+
+document.addEventListener('keydown', (e) => {
+  const theater = $('#trailerTheater');
+  const lb = $('#lightboxModal');
+
+  if (theater && !theater.hidden) {
+    if (e.key === 'Escape') closeTrailerTheater();
+    if (e.key === 'f' || e.key === 'F') {
+      $('#theaterFullscreenBtn')?.click();
+    }
+    return;
+  }
+
+  if (lb && !lb.hidden) {
+    if (e.key === 'Escape') closeLightboxGallery();
+    if (e.key === 'ArrowLeft') prevLightboxImage();
+    if (e.key === 'ArrowRight') nextLightboxImage();
+    return;
+  }
+
+  if (e.key === 'Escape') {
+    closeAiVibeModal();
+    closeSurpriseModal();
+    closeCompareModal();
+  }
+});
+
+// ==========================================================================
+// FEATURE 4: WATCHLIST CATEGORIES, EXPORT/IMPORT & SHARING
+// ==========================================================================
+
+document.querySelectorAll('.wl-cat-btn').forEach(btn => {
+  on(btn, 'click', () => {
+    document.querySelectorAll('.wl-cat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.wlCategory = btn.dataset.cat;
+    loadWatchlist();
+  });
+});
+
+on('#wlExportJson', 'click', exportWatchlistJson);
+on('#wlExportCsv', 'click', exportWatchlistCsv);
+on('#wlImportInput', 'change', (e) => {
+  if (e.target.files && e.target.files[0]) {
+    importWatchlistFile(e.target.files[0]);
+    e.target.value = '';
+  }
+});
+on('#wlShareBtn', 'click', shareWatchlist);
+
+// Shared Watchlist banner handling on page load
+(function checkSharedWatchlist() {
+  const hash = location.hash;
+  if (hash.includes('#shared-watchlist=')) {
+    try {
+      const b64 = hash.split('#shared-watchlist=')[1];
+      const json = decodeURIComponent(atob(b64));
+      const sharedList = JSON.parse(json);
+      if (Array.isArray(sharedList) && sharedList.length > 0) {
+        const banner = $('#sharedWlBanner');
+        if (banner) {
+          banner.hidden = false;
+          banner.querySelector('strong').textContent = `Shared Watchlist (${sharedList.length} movies loaded):`;
+          on('#saveSharedWlBtn', 'click', () => {
+            const current = getWatchlist();
+            const existing = new Set(current.map(m => m.id));
+            let added = 0;
+            sharedList.forEach(m => {
+              if (m && m.id && !existing.has(m.id)) {
+                current.push({
+                  id: m.id,
+                  title: m.t || m.title || 'Movie',
+                  year: m.y || m.year || 2020,
+                  rating: m.r || m.rating || 0,
+                  category: m.c || 'plan',
+                  medium_cover_image: m.img || m.medium_cover_image || '',
+                  addedAt: Date.now()
+                });
+                existing.add(m.id);
+                added++;
+              }
+            });
+            setWatchlist(current);
+            banner.hidden = true;
+            toast(`Saved ${added} shared movies to your watchlist!`);
+            const wlNav = document.querySelector('.nav-item[data-view="watchlist"]');
+            if (wlNav) wlNav.click();
+          });
+          on('#dismissSharedWlBtn', 'click', () => {
+            banner.hidden = true;
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Invalid shared watchlist hash', err);
+    }
+  }
+})();
+
+// Online / Offline Status
+function updateNetworkStatus() {
+  const offlineBanner = $('#offlineBanner');
+  if (offlineBanner) {
+    offlineBanner.hidden = navigator.onLine;
+  }
+}
+window.addEventListener('online', updateNetworkStatus);
+window.addEventListener('offline', updateNetworkStatus);
+updateNetworkStatus();
+
+// Initialize modern view mode and mobile bottom navigation
+if (typeof initViewMode === 'function') initViewMode();
+if (typeof initMobileNavigation === 'function') initMobileNavigation();
