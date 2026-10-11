@@ -64,7 +64,11 @@ async function quickSearch(query) {
   try {
     const res = await fetch(`${API}/list_movies.json?query_term=${encodeURIComponent(query)}&limit=5`);
     const json = await res.json();
-    if (json.status !== 'ok' || !json.data.movies) {
+    if (json.status !== 'ok') {
+      renderQuickResults([], json.status_message || 'Search is temporarily unavailable.');
+      return;
+    }
+    if (!Array.isArray(json.data?.movies)) {
       renderQuickResults([]);
       return;
     }
@@ -74,12 +78,15 @@ async function quickSearch(query) {
   }
 }
 
-function renderQuickResults(movies) {
+function renderQuickResults(movies, emptyMessage = 'No movies found.') {
   hSearchResults.innerHTML = '';
   hSearchResults.hidden = false;
 
   if (movies.length === 0) {
-    hSearchResults.innerHTML = '<div class="h-search-empty">No movies found.</div>';
+    const message = document.createElement('div');
+    message.className = 'h-search-empty';
+    message.textContent = emptyMessage;
+    hSearchResults.appendChild(message);
     return;
   }
 
@@ -785,10 +792,15 @@ async function fetchMovies(page = 1, { allowCache = true } = {}) {
   params.set('order_by', sort.order_by);
 
   const res = await fetch(`${API}/list_movies.json?${params}`, { cache: 'force-cache' });
-  if (!res.ok) throw new Error('API error');
+  if (!res.ok) throw new Error(`Movie API request failed (${res.status}).`);
   const json = await res.json();
-  if (json.status !== 'ok') return { movies: [], total: 0 };
-  let movies = json.data.movies || [];
+  if (json.status !== 'ok') {
+    throw new Error(json.status_message || 'Movie API request failed.');
+  }
+  if (!json.data || typeof json.data !== 'object') {
+    throw new Error('Movie API returned an invalid response.');
+  }
+  let movies = Array.isArray(json.data.movies) ? json.data.movies : [];
   if (state.year) movies = movies.filter(m => String(m.year) === String(state.year));
 
   // Apply Advanced Filters
@@ -1094,15 +1106,26 @@ function updateUIState({ isInitial = false, error = false } = {}) {
   loadingEl.hidden = !state.loading || !isInitial;
   emptyEl.hidden = state.loading || hasMovies;
   const clearBtn = $('#clearFiltersBtn');
+  const hasActiveFilters = Boolean(
+    state.query || state.quality || state.genre || state.rating || state.year ||
+    state.language || state.advFilters.decade || state.advFilters.runtime ||
+    state.advFilters.seeds
+  );
   if (error && !hasMovies) {
     emptyEl.hidden = false;
     $('#emptyText').textContent = 'Failed to load movies. Please try again.';
-    clearBtn.hidden = true;
+    clearBtn.hidden = false;
+    clearBtn.textContent = 'Try again';
+    clearBtn.dataset.action = 'retry';
   } else if (!hasMovies && !state.loading) {
     $('#emptyText').textContent = state.mode === 'watchlist'
       ? 'Your watchlist is empty. Tap ♡ on any movie to save it.'
-      : 'No movies found for these filters.';
+      : hasActiveFilters
+        ? 'No movies found for these filters.'
+        : 'No movies are available right now.';
     clearBtn.hidden = state.mode === 'watchlist';
+    clearBtn.textContent = hasActiveFilters ? 'Clear filters' : 'Try again';
+    clearBtn.dataset.action = hasActiveFilters ? 'clear' : 'retry';
   }
   const pgWrap = $('.pagination-wrap');
   if (pgWrap) pgWrap.hidden = state.loading || !hasMovies || state.mode === 'watchlist' || state.total <= state.pageSize;
@@ -1130,6 +1153,7 @@ async function loadMovies(reset = false, targetPage = null) {
 
   state.loading = true;
   const isInitial = reset || targetPage !== null || state.movies.length === 0;
+  let loadError = false;
   updateUIState({ isInitial });
 
   // For numbered pagination, always clear grid
@@ -1163,11 +1187,12 @@ async function loadMovies(reset = false, targetPage = null) {
     }
   } catch (err) {
     console.error(err);
+    loadError = true;
     updateUIState({ isInitial, error: true });
     return;
   } finally {
     state.loading = false;
-    updateUIState({ isInitial: false });
+    updateUIState({ isInitial: false, error: loadError });
   }
 }
 
@@ -2265,7 +2290,10 @@ on(searchInput, 'keydown', (e) => { if (e.key === 'Enter') applyFiltersAndSearch
   on(`#${id}`, 'change', applyFiltersAndSearch);
 });
 on('#backBtn', 'click', closeDetails);
-on('#clearFiltersBtn', 'click', clearFilters);
+on('#clearFiltersBtn', 'click', () => {
+  if ($('#clearFiltersBtn').dataset.action === 'retry') loadMovies(true);
+  else clearFilters();
+});
 on('#clearRecent', 'click', () => {
   LS.set('mbps_recent', []);
   renderRecent();
