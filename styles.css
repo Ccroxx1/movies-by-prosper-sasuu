@@ -1822,28 +1822,29 @@ body.light .share-menu {
 .seo-summary a:hover { text-decoration: underline; }
 
 /* AdSense slots - reserve space, never cover content */
+/* Optimized ad placement - collapses when empty or blocked, expands seamlessly when active */
 .ad-slot {
-  max-width: 1440px;
-  margin: 16px auto;
-  padding: 8px 20px;
-  min-height: 90px;
-  text-align: center;
-  overflow: hidden;
-}
-.ad-slot ins.adsbygoogle {
-  background: transparent;
-}
-
-/* Optimized ad placement */
-.ad-slot {
+  display: none;
   max-width: 970px;
-  margin: 20px auto;
-  padding: 12px 16px;
+  margin: 16px auto;
+  padding: 8px 16px;
   text-align: center;
   position: relative;
-  min-height: 0;
   box-sizing: border-box;
+  z-index: 1;
 }
+
+.ad-slot.ad-active,
+.ad-slot.ad-loaded,
+.ad-slot:has(iframe),
+.ad-slot:has([id^="container-"] > *),
+.ad-slot:has(ins[data-ad-status="filled"]),
+.ad-slot:has(ins > *),
+.ad-slot:has(a),
+.ad-slot:has(img) {
+  display: block;
+}
+
 .ad-slot .ad-label {
   font-size: 0.65rem;
   letter-spacing: 0.08em;
@@ -1852,36 +1853,32 @@ body.light .share-menu {
   margin-bottom: 6px;
   opacity: 0.7;
 }
+
 .ad-slot .ad-container {
-  min-height: 90px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  background: rgba(255,255,255,0.02);
-  border: 1px dashed rgba(255,255,255,0.06);
-  overflow: hidden;
-}
-.ad-slot.ad-loaded .ad-container {
-  border-style: solid;
-  border-color: transparent;
   background: transparent;
-  min-height: auto;
+  overflow: hidden;
+  margin: 0 auto;
 }
+
+.ad-slot ins.adsbygoogle {
+  background: transparent;
+  display: block;
+  width: 100%;
+}
+
 .ad-slot-top { margin-top: 8px; }
-.ad-slot-mid { margin: 28px auto; max-width: 1000px; }
+.ad-slot-mid { margin: 24px auto; max-width: 1000px; }
 .ad-container [id^="container-"] { width: 100%; min-height: 50px; }
 .ad-slot-footer { margin: 24px auto 8px; max-width: 970px; }
-.ad-slot-details { margin: 28px 0 8px; max-width: 100%; }
+.ad-slot-details { margin: 24px 0 8px; max-width: 100%; }
 
-/* Don't show empty dashed boxes aggressively on tiny screens if collapsed */
 @media (max-width: 600px) {
-  .ad-slot { padding: 8px 12px; margin: 14px auto; }
-  .ad-slot .ad-container { min-height: 60px; }
+  .ad-slot { padding: 6px 12px; margin: 12px auto; }
 }
-
-/* Keep ads from overlapping sticky header */
-.ad-slot { z-index: 1; }
 
 /* Legal disclaimers */
 .footer-bottom .disclaimer {
@@ -2379,8 +2376,8 @@ body.light .toast {
   border-color: rgba(0,0,0,0.1);
 }
 body.light .ad-slot .ad-container {
-  background: rgba(0,0,0,0.03);
-  border-color: rgba(0,0,0,0.08);
+  background: transparent;
+  border-color: transparent;
 }
 body.light .btn-share,
 body.light .btn-report,
@@ -3917,6 +3914,35 @@ img {
   background: var(--accent-hover);
 }
 
+body.light #aiVibeInput {
+  background: #f4f4f5;
+  color: #18181b;
+  border-color: rgba(168, 85, 247, 0.4);
+}
+body.light .vibe-chip {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #3f3f46;
+}
+body.light .ai-curator-banner {
+  background: rgba(147, 51, 234, 0.09);
+  border-color: rgba(147, 51, 234, 0.25);
+  color: #6b21a8;
+}
+body.light .ai-vibe-card {
+  background: #f4f4f5;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+body.light .ai-vibe-card:hover {
+  background: #ebebee;
+}
+body.light .ai-vibe-title {
+  color: #18181b;
+}
+body.light .ai-vibe-reason {
+  color: #581c87;
+}
+
 /* Surprise Me / Roulette Modal */
 .surprise-modal-box {
   max-width: 540px !important;
@@ -3955,12 +3981,25 @@ img {
 .surprise-filter-item select {
   width: 100%;
   height: 38px;
-  background: #141416;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #1c1c20;
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
-  color: var(--text);
-  font-size: 0.82rem;
+  color: #f4f4f5;
+  font-size: 0.85rem;
   padding: 0 8px;
+}
+.surprise-filter-item select option {
+  background: #1c1c20;
+  color: #f4f4f5;
+}
+body.light .surprise-filter-item select {
+  background: #f4f4f5;
+  border-color: rgba(0, 0, 0, 0.18);
+  color: #18181b;
+}
+body.light .surprise-filter-item select option {
+  background: #ffffff;
+  color: #18181b;
 }
 .surprise-action-wrap {
   text-align: center;
@@ -3981,6 +4020,16 @@ img {
   padding: 16px;
   margin-top: 14px;
   animation: rollIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+body.light .surprise-card {
+  background: #f4f4f5;
+  border-color: rgba(245, 197, 24, 0.6);
+}
+body.light .surprise-card-title {
+  color: #18181b;
+}
+body.light .surprise-card-desc {
+  color: #52525b;
 }
 @keyframes rollIn {
   from { opacity: 0; transform: translateY(12px) scale(0.96); }

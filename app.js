@@ -731,23 +731,35 @@ function clearMovieStructuredData() {
 
 
 function initAdSlots() {
-  // Mark containers ready; Auto ads fills page-level inventory.
-  // Manual units can later target [data-ad-pos] with real data-ad-slot IDs.
-  document.querySelectorAll('.ad-container').forEach(box => {
-    if (box.dataset.ready) return;
-    box.dataset.ready = '1';
-    // Optional: request a responsive unit when slots exist in AdSense
-    // (requires real slot IDs - keep Auto ads as primary)
+  // Push all AdSense units safely
+  document.querySelectorAll('.ad-container ins.adsbygoogle').forEach(ins => {
+    if (ins.dataset.adsbygoogleStatus) return;
+    try {
+      (window.adsbygoogle = window.adsbygoogle || []).push({});
+    } catch (e) {
+      console.warn('AdSense unit push note:', e);
+    }
   });
-  // Observe when iframes or ad nodes appear → mark loaded (layout stability)
-  const obs = new MutationObserver(() => {
+
+  // Dynamically activate slots only when actual ad content, iframes, or banners populate
+  const checkAdVisibility = () => {
     document.querySelectorAll('.ad-slot').forEach(slot => {
-      if (slot.querySelector('iframe, [id^="container-"] > *, a, img')) slot.classList.add('ad-loaded');
+      const hasContent = slot.querySelector('iframe, [id^="container-"] > *, ins[data-ad-status="filled"], ins > iframe, a, img');
+      if (hasContent) {
+        slot.classList.add('ad-active', 'ad-loaded');
+      }
     });
-  });
+  };
+
+  checkAdVisibility();
+  const obs = new MutationObserver(checkAdVisibility);
   document.querySelectorAll('.ad-slot').forEach(slot => {
-    obs.observe(slot, { childList: true, subtree: true });
+    obs.observe(slot, { childList: true, subtree: true, attributes: true });
   });
+
+  setTimeout(checkAdVisibility, 1000);
+  setTimeout(checkAdVisibility, 2500);
+  setTimeout(checkAdVisibility, 6000);
 }
 
 
@@ -2169,56 +2181,115 @@ async function searchVibe(vibeText) {
   resultsEl.hidden = true;
   gridEl.innerHTML = '';
 
+  let data = null;
+
+  // 1. Try server-side AI vibe search endpoint first
   try {
     const res = await fetch('/api/ai/vibe-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ vibe: vibeText.trim() })
     });
-
-    if (!res.ok) throw new Error('AI search failed');
-    const data = await res.json();
-    statusEl.hidden = true;
-    resultsEl.hidden = false;
-    bannerEl.textContent = data.summary || 'Curated movie matches:';
-
-    const items = data.items || [];
-    if (!items.length) {
-      gridEl.innerHTML = '<p style="color:#888;padding:20px 0;">No matching movies found. Try another mood or keyword.</p>';
-      return;
-    }
-
-    items.forEach(item => {
-      const card = document.createElement('div');
-      card.className = 'ai-vibe-card';
-      const img = fixImageUrl(item.medium_cover_image || '');
-      card.innerHTML = `
-        <img class="ai-vibe-thumb" src="${img}" alt="${escapeHtml(item.title)}" onerror="this.style.opacity=0.3" />
-        <div class="ai-vibe-info">
-          <div class="ai-vibe-title">${escapeHtml(item.title)}</div>
-          <div class="ai-vibe-meta">${item.year || ''} • ${stars(item.rating || 0)} • ${escapeHtml(item.genre || item.genres?.[0] || 'Film')}</div>
-          <div class="ai-vibe-reason">✨ ${escapeHtml(item.matchReason)}</div>
-        </div>
-        <button type="button" class="ai-vibe-btn">Explore</button>
-      `;
-      card.querySelector('.ai-vibe-btn').onclick = () => {
-        closeAiVibeModal();
-        if (item.id) {
-          openDetails(item.id, item.title + (item.year ? ' ' + item.year : ''), item);
-        } else {
-          searchInput.value = item.title;
-          state.query = item.title;
-          loadMovies(true);
+    if (res.ok) {
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        const json = await res.json();
+        if (json && Array.isArray(json.items) && json.items.length > 0) {
+          data = json;
         }
-      };
-      gridEl.appendChild(card);
-    });
-  } catch (err) {
-    statusEl.hidden = true;
-    resultsEl.hidden = false;
-    bannerEl.textContent = 'Curated recommendations:';
-    gridEl.innerHTML = `<p style="color:#ff6b6b;padding:20px 0;">Error fetching AI matches: ${escapeHtml(err.message)}</p>`;
+      }
+    }
+  } catch (_) {
+    // Proceed to robust catalog fallback
   }
+
+  // 2. Intelligent client-side catalog search fallback (works offline / statically on Vercel)
+  if (!data || !Array.isArray(data.items) || data.items.length === 0) {
+    try {
+      const promptLower = vibeText.trim().toLowerCase();
+      let genre = '';
+      if (promptLower.includes('cyberpunk') || promptLower.includes('space') || promptLower.includes('sci-fi')) genre = 'Sci-Fi';
+      else if (promptLower.includes('noir') || promptLower.includes('heist') || promptLower.includes('crime')) genre = 'Crime';
+      else if (promptLower.includes('thrill') || promptLower.includes('psychological')) genre = 'Thriller';
+      else if (promptLower.includes('feel-good') || promptLower.includes('cozy') || promptLower.includes('comedy')) genre = 'Comedy';
+      else if (promptLower.includes('creature') || promptLower.includes('dread') || promptLower.includes('horror')) genre = 'Horror';
+      else if (promptLower.includes('action') || promptLower.includes('fight')) genre = 'Action';
+      else if (promptLower.includes('adventure') || promptLower.includes('journey')) genre = 'Adventure';
+
+      const words = promptLower.replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 3 && !['with','and','that','this','movie','movies','film','films'].includes(w));
+      const queryTerm = words[0] || '';
+
+      const queryParams = new URLSearchParams({ limit: 6, sort_by: 'rating', order_by: 'desc' });
+      if (queryTerm) queryParams.set('query_term', queryTerm);
+      if (genre) queryParams.set('genre', genre);
+
+      let catData = await fetchFromMovieApi('list_movies.json', queryParams);
+      let catalogMovies = catData?.data?.movies || [];
+
+      if (catalogMovies.length === 0 && genre) {
+        catData = await fetchFromMovieApi('list_movies.json', { genre, limit: 6, sort_by: 'rating', order_by: 'desc' });
+        catalogMovies = catData?.data?.movies || [];
+      } else if (catalogMovies.length === 0) {
+        catData = await fetchFromMovieApi('list_movies.json', { limit: 6, sort_by: 'rating', order_by: 'desc' });
+        catalogMovies = catData?.data?.movies || [];
+      }
+
+      if (catalogMovies.length > 0) {
+        data = {
+          summary: `Curated cinematic matches for: "${vibeText.trim()}"`,
+          items: catalogMovies.map(m => ({
+            id: m.id,
+            title: m.title,
+            year: m.year,
+            rating: m.rating,
+            genre: m.genres?.[0] || 'Film',
+            medium_cover_image: m.medium_cover_image,
+            matchReason: `High-rated ${m.genres?.[0] || 'film'} matching your aesthetic.`
+          }))
+        };
+      }
+    } catch (err) {
+      console.warn('Catalog vibe search notice:', err);
+    }
+  }
+
+  statusEl.hidden = true;
+  resultsEl.hidden = false;
+
+  const items = data?.items || [];
+  if (!items.length) {
+    bannerEl.textContent = `No exact matches found for "${vibeText.trim()}".`;
+    gridEl.innerHTML = '<p style="color:var(--text-muted);padding:20px 0;text-align:center;">Try another mood, genre, or keyword like "cyberpunk noir", "feel-good", or "deep space".</p>';
+    return;
+  }
+
+  bannerEl.textContent = data.summary || 'Curated movie matches:';
+  gridEl.innerHTML = '';
+  items.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'ai-vibe-card';
+    const img = fixImageUrl(item.medium_cover_image || '');
+    card.innerHTML = `
+      <img class="ai-vibe-thumb" src="${img}" alt="${escapeHtml(item.title)}" onerror="handlePosterError(this, '${escapeHtml(item.title).replace(/'/g, "\\'")}', '${item.year || ''}')" />
+      <div class="ai-vibe-info">
+        <div class="ai-vibe-title">${escapeHtml(item.title)}</div>
+        <div class="ai-vibe-meta">${item.year || ''} • ${stars(item.rating || 0)} • ${escapeHtml(item.genre || item.genres?.[0] || 'Film')}</div>
+        <div class="ai-vibe-reason">✨ ${escapeHtml(item.matchReason)}</div>
+      </div>
+      <button type="button" class="ai-vibe-btn">Explore</button>
+    `;
+    card.querySelector('.ai-vibe-btn').onclick = () => {
+      closeAiVibeModal();
+      if (item.id) {
+        openDetails(item.id, item.title + (item.year ? ' ' + item.year : ''), item);
+      } else {
+        searchInput.value = item.title;
+        state.query = item.title;
+        loadMovies(true);
+      }
+    };
+    gridEl.appendChild(card);
+  });
 }
 
 function openSurpriseModal() {
@@ -2250,13 +2321,43 @@ async function rollSurpriseMovie() {
   if (quality) params.set('quality', quality);
 
   try {
-    const res = await fetch(`/api/random-movie?${params}`);
-    if (!res.ok) throw new Error('Failed to roll random movie');
-    const { movie } = await res.json();
+    let movie = null;
+
+    // 1. Try server random-movie endpoint
+    try {
+      const res = await fetch(`/api/random-movie?${params}`);
+      if (res.ok) {
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const json = await res.json();
+          movie = json?.movie;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Client-side fallback if server endpoint unavailable
+    if (!movie) {
+      const listParams = new URLSearchParams({ limit: 20 });
+      if (genre) listParams.set('genre', genre);
+      if (rating) listParams.set('minimum_rating', rating);
+      if (quality) listParams.set('quality', quality);
+      const randomPage = Math.floor(Math.random() * 4) + 1;
+      listParams.set('page', randomPage);
+      listParams.set('sort_by', 'rating');
+
+      const catData = await fetchFromMovieApi('list_movies.json', listParams);
+      const pool = catData?.data?.movies || [];
+      if (pool.length > 0) {
+        movie = pool[Math.floor(Math.random() * pool.length)];
+      }
+    }
+
+    if (!movie) throw new Error('No movies found matching criteria');
+
     resultWrap.hidden = false;
     const img = fixImageUrl(movie.medium_cover_image || movie.large_cover_image);
     cardEl.innerHTML = `
-      <img class="surprise-card-img" src="${img}" alt="${escapeHtml(movie.title)}" onerror="this.style.opacity=0.3" />
+      <img class="surprise-card-img" src="${img}" alt="${escapeHtml(movie.title)}" onerror="handlePosterError(this, '${escapeHtml(movie.title).replace(/'/g, "\\'")}', '${movie.year || ''}')" />
       <div class="surprise-card-info">
         <h3 class="surprise-card-title">${escapeHtml(movie.title)} (${movie.year})</h3>
         <div class="surprise-card-meta">${stars(movie.rating)} · ${escapeHtml(movie.genres?.join(', ') || 'Film')}</div>

@@ -6,6 +6,7 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
+    { "source": "/api/v2/:path*", "destination": "https://yts.gg/api/v2/:path*" },
     { "source": "/movie/:id", "destination": "/index.html" },
     { "source": "/((?!icons/|edge/|.*\\..*).*)", "destination": "/index.html" }
   ],
