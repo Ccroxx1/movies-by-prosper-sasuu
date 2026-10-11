@@ -6,9 +6,43 @@ function debounce(fn, delay) {
   };
 }
 
-const API = (typeof window !== 'undefined' && window.location?.origin && window.location.origin.startsWith('http'))
-  ? '/api/v2'
-  : 'https://movies-api.accel.li/api/v2';
+const API_ENDPOINTS = [
+  (typeof window !== 'undefined' && window.location?.origin && window.location.origin.startsWith('http')) ? '/api/v2' : null,
+  'https://yts.gg/api/v2',
+  'https://movies-api.accel.li/api/v2',
+].filter(Boolean);
+
+const API = API_ENDPOINTS[0] || 'https://yts.gg/api/v2';
+
+// Unified helper to query YTS movie APIs with automatic multi-tier fallback
+async function fetchFromMovieApi(endpoint, params = {}, options = {}) {
+  const queryStr = params instanceof URLSearchParams ? params.toString() : new URLSearchParams(params).toString();
+  const search = queryStr ? `?${queryStr}` : '';
+
+  let lastError = null;
+  for (const base of API_ENDPOINTS) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 7500);
+      const url = `${base}/${endpoint}${search}`;
+      const res = await fetch(url, {
+        ...options,
+        signal: options.signal || controller.signal,
+      });
+      clearTimeout(timer);
+      if (res.ok) {
+        const json = await res.json();
+        if (json && (json.status === 'ok' || json.data)) {
+          return json;
+        }
+      }
+      lastError = new Error(`Endpoint ${base} returned status ${res.status}`);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('All Movie API endpoints failed');
+}
 
 const state = {
   page: 1,
@@ -62,15 +96,18 @@ async function quickSearch(query) {
   hSearchClear.hidden = false;
 
   try {
-    const res = await fetch(`${API}/list_movies.json?query_term=${encodeURIComponent(query)}&limit=5`);
-    const json = await res.json();
-    if (json.status !== 'ok' || !json.data.movies) {
+    const json = await fetchFromMovieApi('list_movies.json', {
+      query_term: query.trim(),
+      limit: 5,
+    });
+    if (!json || json.status !== 'ok' || !json.data?.movies) {
       renderQuickResults([]);
       return;
     }
     renderQuickResults(json.data.movies);
   } catch (err) {
     console.error('Quick search error:', err);
+    renderQuickResults([]);
   }
 }
 
@@ -479,6 +516,39 @@ function fixImageUrl(url) {
   return str.replace(/https?:\/\/(?:img\.)?yts\.(?:mx|am|lt|gg)/g, 'https://img.yts.gg');
 }
 
+function handlePosterError(img, title = 'Movie', year = '') {
+  if (!img) return;
+  // Step 1: try the internal image proxy if not already tried
+  if (!img.dataset.proxied) {
+    img.dataset.proxied = 'true';
+    const raw = img.dataset.origSrc || img.getAttribute('src') || '';
+    if (raw && !raw.startsWith('data:') && !raw.startsWith('/api/image-proxy')) {
+      img.src = `/api/image-proxy?url=${encodeURIComponent(raw)}`;
+      return;
+    }
+  }
+
+  // Step 2: render an elegant high-resolution cinematic SVG placeholder
+  const cleanTitle = (title || 'Movie').replace(/[<>&"]/g, '');
+  const cleanYear = year ? String(year) : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 450" width="100%" height="100%">
+    <defs>
+      <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#18181b"/>
+        <stop offset="100%" stop-color="#09090b"/>
+      </linearGradient>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#g)"/>
+    <rect x="12" y="12" width="276" height="426" rx="8" fill="none" stroke="#27272a" stroke-width="2"/>
+    <circle cx="150" cy="180" r="44" fill="#27272a"/>
+    <polygon points="142,162 166,180 142,198" fill="#e50914"/>
+    <text x="150" y="270" fill="#f4f4f5" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="16" text-anchor="middle">${cleanTitle.length > 24 ? cleanTitle.slice(0, 22) + '…' : cleanTitle}</text>
+    <text x="150" y="295" fill="#a1a1aa" font-family="system-ui, -apple-system, sans-serif" font-weight="500" font-size="13" text-anchor="middle">${cleanYear}</text>
+  </svg>`;
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  img.style.opacity = '1';
+}
+
 function createMagnet(movie, torrent) {
   // Official recommended trackers per https://yts.gg/api
   const trackers = [
@@ -761,11 +831,13 @@ function getMovieListCache(page) {
     if (!raw) return null;
     const item = JSON.parse(raw);
     if (!item || Date.now() - item.ts > MOVIE_LIST_CACHE_TTL) return null;
+    if (!item.data || !Array.isArray(item.data.movies) || item.data.movies.length === 0) return null;
     return item.data;
   } catch { return null; }
 }
 
 function setMovieListCache(page, data) {
+  if (!data || !Array.isArray(data.movies) || data.movies.length === 0) return;
   try {
     localStorage.setItem(movieListCacheKey(page), JSON.stringify({ ts: Date.now(), data }));
   } catch {}
@@ -773,7 +845,7 @@ function setMovieListCache(page, data) {
 
 async function fetchMovies(page = 1, { allowCache = true } = {}) {
   const cached = allowCache ? getMovieListCache(page) : null;
-  if (cached) return cached;
+  if (cached && cached.movies && cached.movies.length > 0) return cached;
 
   const params = new URLSearchParams({ page, limit: state.pageSize });
   if (state.query.trim()) params.set('query_term', state.query.trim());
@@ -791,11 +863,9 @@ async function fetchMovies(page = 1, { allowCache = true } = {}) {
   params.set('sort_by', sort.sort_by);
   params.set('order_by', sort.order_by);
 
-  const res = await fetch(`${API}/list_movies.json?${params}`, { cache: 'force-cache' });
-  if (!res.ok) throw new Error('API error');
-  const json = await res.json();
-  if (json.status !== 'ok') return { movies: [], total: 0 };
-  let movies = json.data.movies || [];
+  const json = await fetchFromMovieApi('list_movies.json', params);
+  if (!json || json.status !== 'ok') return { movies: [], total: 0 };
+  let movies = json.data?.movies || [];
   if (state.year) movies = movies.filter(m => String(m.year) === String(state.year));
 
   // Apply Advanced Filters
@@ -860,11 +930,9 @@ async function fetchMovieDetails(id, { signal, rich = true } = {}) {
   }
 
   try {
-    const res = await fetch(`${API}/movie_details.json?${params}`, { signal: controller.signal, cache: 'no-store' });
-    if (!res.ok) throw new Error(`API error (${res.status})`);
-    const json = await res.json();
-    if (json.status !== 'ok') return null;
-    const movie = json.data.movie;
+    const json = await fetchFromMovieApi('movie_details.json', params, { signal: controller.signal });
+    if (!json || json.status !== 'ok') return null;
+    const movie = json.data?.movie;
     if (movie && rich) cacheSet(id, movie);
     return movie;
   } finally {
@@ -913,7 +981,7 @@ function renderMovieCard(movie) {
     card.innerHTML = `
       <div class="poster-wrap">
         <button class="card-watch ${watched ? 'on' : ''}" title="Watchlist" aria-label="Watchlist">${watched ? '♥' : '♡'}</button>
-        <img class="poster-img" src="${imgUrl}" alt="${escapeHtml(movie.title)}" width="80" height="120" loading="lazy" decoding="async" onerror="this.style.opacity='0.25'" />
+        <img class="poster-img" src="${imgUrl}" alt="${escapeHtml(movie.title)}" width="80" height="120" loading="lazy" decoding="async" onerror="handlePosterError(this, '${escapeHtml(movie.title).replace(/'/g, "\\'")}', '${movie.year || ''}')" />
       </div>
       <div class="card-body">
         <div class="card-title">${escapeHtml(movie.title)}</div>
@@ -953,7 +1021,7 @@ function renderMovieCard(movie) {
             <svg class="btn-ico" aria-hidden="true"><use href="#i-scale"/></svg>
           </button>
         </div>
-        <img class="poster-img" src="${imgUrl}" alt="${escapeHtml(movie.title)}" width="230" height="345" loading="${state.movies.indexOf(movie) < 6 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${state.movies.indexOf(movie) < 2 ? 'high' : 'auto'}" onerror="this.style.opacity='0.25'" />
+        <img class="poster-img" src="${imgUrl}" alt="${escapeHtml(movie.title)}" width="230" height="345" loading="${state.movies.indexOf(movie) < 6 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${state.movies.indexOf(movie) < 2 ? 'high' : 'auto'}" onerror="handlePosterError(this, '${escapeHtml(movie.title).replace(/'/g, "\\'")}', '${movie.year || ''}')" />
         <div class="rating-badge">${stars(movie.rating)}</div>
         ${qualityLabel ? `<div class="card-quality-badge">${qualityLabel}</div>` : ''}
       </div>
@@ -1701,9 +1769,7 @@ async function loadMovieSuggestions(movieId) {
   if (countEl) countEl.textContent = '(…)';
 
   try {
-    const res = await fetch(`${API}/movie_suggestions.json?movie_id=${movieId}`);
-    if (!res.ok) throw new Error('Suggestions request failed');
-    const json = await res.json();
+    const json = await fetchFromMovieApi('movie_suggestions.json', { movie_id: movieId });
     const suggestions = json?.data?.movies || [];
     if (countEl) countEl.textContent = `(${suggestions.length})`;
 
@@ -2282,7 +2348,7 @@ function handleRoute() {
     const genre = decodeURIComponent(path.split('/')[2]);
     const formattedGenre = genre.charAt(0).toUpperCase() + genre.slice(1).toLowerCase();
     selectGenreFromHub(formattedGenre);
-  } else if (path === '' || path === '/' || path === '/index.html') {
+  } else {
     if (state.currentMovieId) {
       state.currentMovieId = null;
       detailsView.hidden = true;

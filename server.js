@@ -11,6 +11,17 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+// Enable CORS and handle preflight requests for all endpoints
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', '*');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 // Initialize Google GenAI SDK server-side
 const ai = process.env.GEMINI_API_KEY
   ? new GoogleGenAI({
@@ -31,10 +42,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Official YTS endpoints documented at https://yts.gg/api
+// Official YTS endpoints documented at https://yts.gg/api with failover
 const API_UPSTREAMS = [
-  'https://movies-api.accel.li/api/v2',
   'https://yts.gg/api/v2',
+  'https://movies-api.accel.li/api/v2',
 ];
 
 // Helper to query YTS movies API internally with automatic upstream fallback
@@ -335,10 +346,11 @@ app.get('/api/random-movie', async (req, res) => {
 // with automatic failover across official YTS upstreams (https://yts.gg/api)
 app.use('/api/v2', async (req, res) => {
   let lastError = null;
+  const cleanPath = req.url.startsWith('/api/v2') ? req.url.slice('/api/v2'.length) : req.url;
 
   for (const upstream of API_UPSTREAMS) {
     try {
-      const targetUrl = `${upstream}${req.url}`;
+      const targetUrl = `${upstream}${cleanPath.startsWith('/') ? '' : '/'}${cleanPath}`;
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 7000);
 
@@ -356,6 +368,7 @@ app.use('/api/v2', async (req, res) => {
         const data = await apiRes.text();
         return res.status(apiRes.status)
           .set('Content-Type', apiRes.headers.get('content-type') || 'application/json')
+          .set('Access-Control-Allow-Origin', '*')
           .send(data);
       }
 
@@ -367,10 +380,51 @@ app.use('/api/v2', async (req, res) => {
   }
 
   console.error('API proxy error across all upstreams:', lastError?.message);
-  res.status(502).json({
-    status: 'error',
-    message: 'API request failed: ' + (lastError?.message || 'All upstreams unavailable'),
-  });
+  res.status(502)
+    .set('Access-Control-Allow-Origin', '*')
+    .json({
+      status: 'error',
+      message: 'API request failed: ' + (lastError?.message || 'All upstreams unavailable'),
+    });
+});
+
+// Image proxy to guarantee poster and backdrop loading across firewalls/adblockers
+app.get('/api/image-proxy', async (req, res) => {
+  const imageUrl = req.query.url;
+  if (!imageUrl || typeof imageUrl !== 'string') {
+    return res.status(400).send('Missing url parameter');
+  }
+
+  let targetUrl = imageUrl.trim();
+  if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+    targetUrl = 'https://' + targetUrl;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 7000);
+    const imgRes = await fetch(targetUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://yts.gg/',
+      },
+    });
+    clearTimeout(timeout);
+
+    if (!imgRes.ok) {
+      return res.status(imgRes.status).send('Failed to fetch image upstream');
+    }
+
+    const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    const buffer = await imgRes.arrayBuffer();
+    return res.send(Buffer.from(buffer));
+  } catch (err) {
+    return res.status(502).send('Image proxy error: ' + err.message);
+  }
 });
 
 // Serve static assets from root directory
