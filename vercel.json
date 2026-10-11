@@ -7,7 +7,7 @@
   "trailingSlash": false,
   "rewrites": [
     { "source": "/movie/:id", "destination": "/index.html" },
-    { "source": "/((?!icons/|edge/|.*\\..*).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|icons/|edge/|.*\\..*).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
