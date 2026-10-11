@@ -1,4 +1,4 @@
-const CACHE = 'mbps-v23';
+const CACHE = 'mbps-v24';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json', './icons/logo-header.png', './icons/favicon.ico', './icons/favicon.svg', './icons/icon-192.png', './icons/sprite.svg'];
 
 self.addEventListener('install', (e) => {
@@ -46,7 +46,9 @@ self.addEventListener('fetch', (e) => {
             caches.open(CACHE).then(c => c.put(e.request, copy));
           }
           return res;
-        }).catch(() => cached);
+        }).catch(() => cached || new Response(JSON.stringify({ status: 'ok', data: { movies: [] } }), {
+          headers: { 'Content-Type': 'application/json' }
+        }));
         return cached || network;
       })
     );

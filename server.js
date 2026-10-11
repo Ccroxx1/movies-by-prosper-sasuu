@@ -42,16 +42,70 @@ app.use((req, res, next) => {
   next();
 });
 
+// Server-side in-memory cache for instant responses and offline/rate-limit resilience
+const apiCache = new Map();
+const API_CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache
+const MAX_API_CACHE_ENTRIES = 500;
+
+function getApiCache(key) {
+  const item = apiCache.get(key);
+  if (!item) return null;
+  if (Date.now() - item.ts > API_CACHE_TTL) {
+    apiCache.delete(key);
+    return null;
+  }
+  return item;
+}
+
+function setApiCache(key, data, contentType = 'application/json', status = 200) {
+  if (apiCache.size >= MAX_API_CACHE_ENTRIES) {
+    const oldestKey = apiCache.keys().next().value;
+    apiCache.delete(oldestKey);
+  }
+  apiCache.set(key, { data, contentType, status, ts: Date.now() });
+}
+
+// In-memory cache for proxied images (posters, backdrops)
+const imageCache = new Map();
+const IMAGE_CACHE_TTL = 60 * 60 * 1000; // 1 hour cache
+const MAX_IMAGE_CACHE_ENTRIES = 300;
+
+function getImageCache(key) {
+  const item = imageCache.get(key);
+  if (!item) return null;
+  if (Date.now() - item.ts > IMAGE_CACHE_TTL) {
+    imageCache.delete(key);
+    return null;
+  }
+  return item;
+}
+
+function setImageCache(key, buffer, contentType) {
+  if (imageCache.size >= MAX_IMAGE_CACHE_ENTRIES) {
+    const oldestKey = imageCache.keys().next().value;
+    imageCache.delete(oldestKey);
+  }
+  imageCache.set(key, { buffer, contentType, ts: Date.now() });
+}
+
 // Official YTS endpoints documented at https://yts.gg/api with failover
 const API_UPSTREAMS = [
   'https://yts.gg/api/v2',
   'https://movies-api.accel.li/api/v2',
 ];
 
-// Helper to query YTS movies API internally with automatic upstream fallback
+// Helper to query YTS movies API internally with automatic upstream fallback and caching
 async function queryMovieApi(endpoint, params = {}) {
   const query = new URLSearchParams(params).toString();
   const queryString = query ? '?' + query : '';
+  const cacheKey = `${endpoint}${queryString}`;
+
+  const cached = getApiCache(cacheKey);
+  if (cached && cached.data) {
+    try {
+      return typeof cached.data === 'string' ? JSON.parse(cached.data) : cached.data;
+    } catch (_) {}
+  }
 
   for (const upstream of API_UPSTREAMS) {
     const url = `${upstream}/${endpoint}${queryString}`;
@@ -69,6 +123,7 @@ async function queryMovieApi(endpoint, params = {}) {
       if (r.ok) {
         const data = await r.json();
         if (data && (data.status === 'ok' || data.data)) {
+          setApiCache(cacheKey, JSON.stringify(data), 'application/json', 200);
           return data;
         }
       }
@@ -343,10 +398,20 @@ app.get('/api/random-movie', async (req, res) => {
 });
 
 // Proxy movie API requests to avoid CORS and client-side network restrictions,
-// with automatic failover across official YTS upstreams (https://yts.gg/api)
+// with automatic failover across official YTS upstreams (https://yts.gg/api) and in-memory caching
 app.use('/api/v2', async (req, res) => {
   let lastError = null;
   const cleanPath = req.url.startsWith('/api/v2') ? req.url.slice('/api/v2'.length) : req.url;
+  const cacheKey = cleanPath || '/';
+
+  const cached = getApiCache(cacheKey);
+  if (cached) {
+    return res.status(cached.status || 200)
+      .set('Content-Type', cached.contentType || 'application/json')
+      .set('Access-Control-Allow-Origin', '*')
+      .set('X-Cache-Status', 'HIT')
+      .send(cached.data);
+  }
 
   for (const upstream of API_UPSTREAMS) {
     try {
@@ -366,9 +431,14 @@ app.use('/api/v2', async (req, res) => {
       // If response is OK or a valid not-found (404), return it directly
       if (apiRes.ok || apiRes.status === 404) {
         const data = await apiRes.text();
+        const contentType = apiRes.headers.get('content-type') || 'application/json';
+        if (apiRes.ok) {
+          setApiCache(cacheKey, data, contentType, apiRes.status);
+        }
         return res.status(apiRes.status)
-          .set('Content-Type', apiRes.headers.get('content-type') || 'application/json')
+          .set('Content-Type', contentType)
           .set('Access-Control-Allow-Origin', '*')
+          .set('X-Cache-Status', 'MISS')
           .send(data);
       }
 
@@ -400,6 +470,15 @@ app.get('/api/image-proxy', async (req, res) => {
     targetUrl = 'https://' + targetUrl;
   }
 
+  const cachedImg = getImageCache(targetUrl);
+  if (cachedImg) {
+    res.setHeader('Content-Type', cachedImg.contentType || 'image/jpeg');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    res.setHeader('X-Cache-Status', 'HIT');
+    return res.send(cachedImg.buffer);
+  }
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 7000);
@@ -420,8 +499,10 @@ app.get('/api/image-proxy', async (req, res) => {
     res.setHeader('Content-Type', contentType);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
-    const buffer = await imgRes.arrayBuffer();
-    return res.send(Buffer.from(buffer));
+    const arrayBuffer = await imgRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    setImageCache(targetUrl, buffer, contentType);
+    return res.send(buffer);
   } catch (err) {
     return res.status(502).send('Image proxy error: ' + err.message);
   }

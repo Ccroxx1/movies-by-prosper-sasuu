@@ -744,6 +744,7 @@ function initAdSlots() {
   // Dynamically activate slots only when actual ad content, iframes, or banners populate
   const checkAdVisibility = () => {
     document.querySelectorAll('.ad-slot').forEach(slot => {
+      if (slot.classList.contains('ad-loaded')) return;
       const hasContent = slot.querySelector('iframe, [id^="container-"] > *, ins[data-ad-status="filled"], ins > iframe, a, img');
       if (hasContent) {
         slot.classList.add('ad-active', 'ad-loaded');
@@ -752,14 +753,14 @@ function initAdSlots() {
   };
 
   checkAdVisibility();
-  const obs = new MutationObserver(checkAdVisibility);
-  document.querySelectorAll('.ad-slot').forEach(slot => {
-    obs.observe(slot, { childList: true, subtree: true, attributes: true });
-  });
+  try {
+    const obs = new MutationObserver(checkAdVisibility);
+    document.querySelectorAll('.ad-container').forEach(container => {
+      obs.observe(container, { childList: true, subtree: true });
+    });
+  } catch (_) {}
 
-  setTimeout(checkAdVisibility, 1000);
-  setTimeout(checkAdVisibility, 2500);
-  setTimeout(checkAdVisibility, 6000);
+  setTimeout(checkAdVisibility, 1500);
 }
 
 
@@ -964,7 +965,7 @@ function cancelPrefetch(id) {
   if (t) { clearTimeout(t); prefetchTimers.delete(id); }
 }
 
-function renderMovieCard(movie) {
+function renderMovieCard(movie, index = 0) {
   const card = document.createElement('article');
   card.className = 'movie-card';
   card.dataset.id = movie.id;
@@ -1033,7 +1034,7 @@ function renderMovieCard(movie) {
             <svg class="btn-ico" aria-hidden="true"><use href="#i-scale"/></svg>
           </button>
         </div>
-        <img class="poster-img" src="${imgUrl}" alt="${escapeHtml(movie.title)}" width="230" height="345" loading="${state.movies.indexOf(movie) < 6 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${state.movies.indexOf(movie) < 2 ? 'high' : 'auto'}" onerror="handlePosterError(this, '${escapeHtml(movie.title).replace(/'/g, "\\'")}', '${movie.year || ''}')" />
+        <img class="poster-img" src="${imgUrl}" alt="${escapeHtml(movie.title)}" width="230" height="345" loading="${index < 6 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${index < 2 ? 'high' : 'auto'}" onerror="handlePosterError(this, '${escapeHtml(movie.title).replace(/'/g, "\\'")}', '${movie.year || ''}')" />
         <div class="rating-badge">${stars(movie.rating)}</div>
         ${qualityLabel ? `<div class="card-quality-badge">${qualityLabel}</div>` : ''}
       </div>
@@ -1105,7 +1106,7 @@ function renderMovieCard(movie) {
 function renderGrid(movies, append = false) {
   if (!append) movieGrid.innerHTML = '';
   const frag = document.createDocumentFragment();
-  movies.forEach(m => frag.appendChild(renderMovieCard(m)));
+  movies.forEach((m, i) => frag.appendChild(renderMovieCard(m, i)));
   movieGrid.appendChild(frag);
 }
 
@@ -3146,7 +3147,7 @@ if (typeof initAdSlots === 'function') initAdSlots();
 if (typeof bindStripSwipe === 'function') { bindStripSwipe('.recent-strip'); bindStripSwipe('.genre-chips'); }
 if (typeof guardPosterClicks === 'function') { guardPosterClicks($('#movieGrid')); guardPosterClicks($('#recentStrip')); }
 handleRoute();
-if (parseMovieIdFromLocation() == null) {
+if (parseMovieIdFromLocation() == null && state.movies.length === 0 && !state.loading) {
   loadMovies(true);
 }
 
