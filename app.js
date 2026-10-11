@@ -473,21 +473,28 @@ function showGenresHub() {
 
 function fixImageUrl(url) {
   if (!url) return '';
-  return String(url).replace(/yts\.(mx|am|gg)/g, 'yts.lt');
+  let str = String(url).trim();
+  if (str.startsWith('http://')) str = str.replace('http://', 'https://');
+  // Route movie posters, covers, and screenshots directly to the img.yts.gg Cloudflare CDN per https://yts.gg/api
+  return str.replace(/https?:\/\/(?:img\.)?yts\.(?:mx|am|lt|gg)/g, 'https://img.yts.gg');
 }
 
 function createMagnet(movie, torrent) {
+  // Official recommended trackers per https://yts.gg/api
   const trackers = [
+    'udp://glotorrents.pw:6969/announce',
     'udp://tracker.opentrackr.org:1337/announce',
-    'udp://open.tracker.cl:1337/announce',
-    'udp://tracker.openbittorrent.com:6969/announce',
+    'udp://torrent.gresille.org:80/announce',
+    'udp://tracker.openbittorrent.com:80',
+    'udp://tracker.coppersurfer.tk:6969',
+    'udp://tracker.leechers-paradise.org:6969',
+    'udp://p4p.arenabg.ch:1337',
+    'udp://tracker.internetwarriors.net:1337',
     'udp://open.stealth.si:80/announce',
+    'udp://open.tracker.cl:1337/announce',
     'udp://tracker.torrent.eu.org:451/announce',
-    'udp://exodus.desync.com:6969/announce',
-    'udp://tracker.moeking.me:6969/announce',
     'wss://tracker.openwebtorrent.com',
-    'wss://tracker.btorrent.xyz',
-    'udp://explodie.org:6969/announce'
+    'wss://tracker.btorrent.xyz'
   ];
   let magnet = `magnet:?xt=urn:btih:${torrent.hash}&dn=${encodeURIComponent(movie.title)}`;
   trackers.forEach(t => { magnet += `&tr=${encodeURIComponent(t)}`; });
@@ -1672,15 +1679,77 @@ function renderDetails(movie) {
     bindStripSwipe('.shots-grid');
   }
 
+  // Related suggestions from official endpoint (https://yts.gg/api)
+  loadMovieSuggestions(movie.id);
+
   switchDetailsTab('torrents');
 }
 
 function switchDetailsTab(tab) {
   document.querySelectorAll('.details-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.querySelectorAll('.tab-panel').forEach(p => { p.hidden = true; p.classList.remove('active'); });
-  const map = { torrents: 'panelTorrents', cast: 'panelCast', shots: 'panelShots' };
+  const map = { torrents: 'panelTorrents', cast: 'panelCast', shots: 'panelShots', suggestions: 'panelSuggestions' };
   const el = document.getElementById(map[tab]);
   if (el) { el.hidden = false; el.classList.add('active'); }
+}
+
+async function loadMovieSuggestions(movieId) {
+  const countEl = $('#suggestionCount');
+  const grid = $('#suggestionsGrid');
+  if (!grid) return;
+  grid.innerHTML = '<div style="grid-column: 1/-1; padding: 24px 0; text-align: center; color: var(--text-dim);"><p>Loading related suggestions from YTS API…</p></div>';
+  if (countEl) countEl.textContent = '(…)';
+
+  try {
+    const res = await fetch(`${API}/movie_suggestions.json?movie_id=${movieId}`);
+    if (!res.ok) throw new Error('Suggestions request failed');
+    const json = await res.json();
+    const suggestions = json?.data?.movies || [];
+    if (countEl) countEl.textContent = `(${suggestions.length})`;
+
+    if (!suggestions.length) {
+      grid.innerHTML = '<p class="torrents-empty">No related suggestions returned for this title. Check back later!</p>';
+      return;
+    }
+
+    grid.innerHTML = '';
+    suggestions.forEach(sm => {
+      const card = document.createElement('div');
+      card.className = 'suggestion-card';
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+      card.title = `View details for ${sm.title} (${sm.year})`;
+      const posterUrl = fixImageUrl(sm.medium_cover_image || sm.large_cover_image || '');
+      card.innerHTML = `
+        <div class="suggestion-poster-wrap">
+          <img class="suggestion-poster" src="${posterUrl}" alt="${escapeHtml(sm.title)}" loading="lazy"
+               onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 150%22%3E%3Crect fill=%22%23222%22 width=%22100%22 height=%22150%22/%3E%3Ctext x=%2250%22 y=%2275%22 fill=%22%23666%22 text-anchor=%22middle%22 font-size=%2212%22%3ENo Poster%3C/text%3E%3C/svg%3E'" />
+        </div>
+        <div class="suggestion-info">
+          <div class="suggestion-title">${escapeHtml(sm.title)}</div>
+          <div class="suggestion-meta">
+            <span>${sm.year || ''}</span>
+            <span class="suggestion-rating">★ ${Number(sm.rating || 0).toFixed(1)}</span>
+          </div>
+        </div>
+      `;
+      const navToMovie = () => {
+        openDetails(sm.id, true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+      on(card, 'click', navToMovie);
+      on(card, 'keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          navToMovie();
+        }
+      });
+      grid.appendChild(card);
+    });
+  } catch (err) {
+    if (countEl) countEl.textContent = '(0)';
+    grid.innerHTML = '<p class="torrents-empty">Could not load suggestions at this time.</p>';
+  }
 }
 
 // ==========================================================================
@@ -2847,6 +2916,25 @@ const MODAL_CONTENT = {
       <p>Metadata and links may be incomplete or inaccurate. The Site is provided without warranties.</p>
     ` },
   about: { title: 'About Us', body: `<p><strong>Movies By Prosper Sasuu</strong> is an independent movie discovery project. We index public metadata so you can explore titles and find encodes - we never host video files.</p>` },
+  api: {
+    title: 'YTS.GG API & Integration',
+    body: `
+      <p>This application integrates directly with the official <strong>YTS.GG API</strong> (<a href="https://yts.gg/api" target="_blank" rel="noopener noreferrer" style="color:var(--accent); text-decoration:underline;">https://yts.gg/api</a>) to provide real-time film metadata, artwork, and release streams.</p>
+      <h3 style="margin-top:16px; margin-bottom:8px;">Integrated Endpoints</h3>
+      <ul style="line-height:1.6; margin-left:18px;">
+        <li><code>list_movies.json</code> — Real-time catalog filtering by genre, rating, resolution (720p, 1080p, 4K), and full-text keyword queries.</li>
+        <li><code>movie_details.json</code> — Deep metadata fetch including full synopses, cast rosters (<code>with_cast=true</code>), and high-resolution backdrop/screenshot galleries (<code>with_images=true</code>).</li>
+        <li><code>movie_suggestions.json</code> — Algorithmic recommendation engine generating 4 related films for every title.</li>
+        <li><code>movie_parental_guides.json</code> — Audience guidance and maturity rating classifications.</li>
+      </ul>
+      <h3 style="margin-top:16px; margin-bottom:8px;">Cloudflare CDN &amp; High Availability</h3>
+      <ul style="line-height:1.6; margin-left:18px;">
+        <li><strong>Direct CDN Images:</strong> Movie covers and screenshots route directly via Cloudflare edge caching (<code>img.yts.gg</code>) for instant rendering without redirect delays.</li>
+        <li><strong>Dual-Upstream Failover:</strong> API requests route seamlessly across <code>https://movies-api.accel.li/api/v2</code> and <code>https://yts.gg/api/v2</code> with automatic zero-downtime failover.</li>
+        <li><strong>Official Magnet Trackers:</strong> Magnet URIs are dynamically built with all official high-speed trackers recommended by YTS (OpenTrackr, OpenBittorrent, GloTorrents, LeechersParadise, and WebTorrent).</li>
+      </ul>
+    `
+  },
   contact: { title: 'Contact', body: `<p>📧 <a href="mailto:prospersasuu808@gmail.com">prospersasuu808@gmail.com</a></p><p>We aim to reply within 2–5 business days.</p>` },
   guides: { title: 'Guides & FAQ', body: `<h3>Search</h3><p>Use the search bar or press <kbd>/</kbd>. Filter by quality, genre, rating, year, language.</p><h3>Watchlist</h3><p>Tap ♡ on a poster or details page. Saved in your browser only.</p><h3>Magnets</h3><p>Use Magnet or Copy, then open in your torrent client.</p><h3>Legality</h3><p>Browsing metadata is generally fine; downloading may not be - follow your local laws.</p>` }
 };

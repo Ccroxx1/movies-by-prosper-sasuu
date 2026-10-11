@@ -1164,6 +1164,71 @@ main { min-height: 50vh; padding-bottom: 48px; }
   display: block;
 }
 
+/* Related Suggestions Grid (Official YTS movie_suggestions.json endpoint) */
+.suggestions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 16px;
+}
+.suggestion-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition), background var(--transition);
+}
+.suggestion-card:hover {
+  transform: translateY(-4px);
+  background: var(--bg-card-hover);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+.suggestion-poster-wrap {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  width: 100%;
+  overflow: hidden;
+  background: #141414;
+}
+.suggestion-poster {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.3s ease;
+}
+.suggestion-card:hover .suggestion-poster {
+  transform: scale(1.04);
+}
+.suggestion-info {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.suggestion-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.suggestion-meta {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.suggestion-rating {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* Lightbox for screenshots */
 .lightbox {
   position: fixed;
@@ -4764,5 +4829,23 @@ body.light .details-info h1,
 body.light .details-info h2,
 body.light .details-info #detailsTitle {
   color: #111113;
+}
+body.light .suggestion-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+body.light .suggestion-card:hover {
+  background: #fafafa;
+  border-color: rgba(0, 0, 0, 0.16);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+body.light .suggestion-title {
+  color: #111827;
+}
+body.light .suggestion-meta {
+  color: #6b7280;
+}
+body.light .suggestion-poster-wrap {
+  background: #f3f4f6;
 }
 

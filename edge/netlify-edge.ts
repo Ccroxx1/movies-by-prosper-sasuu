@@ -24,7 +24,7 @@ function escapeHtml(s: string) {
 }
 
 function fixImage(url: string) {
-  return String(url || "").replace(/yts\.(mx|am|gg)/g, "yts.lt");
+  return String(url || "").replace(/https?:\/\/(?:img\.)?yts\.(?:mx|am|lt|gg)/g, "https://img.yts.gg");
 }
 
 export default async (request: Request, context: Context) => {

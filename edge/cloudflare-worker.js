@@ -28,7 +28,7 @@ function escapeHtml(s) {
 
 function fixImage(url) {
   if (!url) return '';
-  return String(url).replace(/yts\.(mx|am|gg)/g, 'yts.lt');
+  return String(url).replace(/https?:\/\/(?:img\.)?yts\.(?:mx|am|lt|gg)/g, 'https://img.yts.gg');
 }
 
 async function fetchMovie(id) {

@@ -31,26 +31,42 @@ app.use((req, res, next) => {
   next();
 });
 
-// Helper to query YTS movies API internally
+// Official YTS endpoints documented at https://yts.gg/api
+const API_UPSTREAMS = [
+  'https://movies-api.accel.li/api/v2',
+  'https://yts.gg/api/v2',
+];
+
+// Helper to query YTS movies API internally with automatic upstream fallback
 async function queryMovieApi(endpoint, params = {}) {
   const query = new URLSearchParams(params).toString();
-  const url = `https://movies-api.accel.li/api/v2/${endpoint}${query ? '?' + query : ''}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-  try {
-    const r = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-    });
-    clearTimeout(timeout);
-    if (!r.ok) return null;
-    return await r.json();
-  } catch (err) {
-    clearTimeout(timeout);
-    return null;
+  const queryString = query ? '?' + query : '';
+
+  for (const upstream of API_UPSTREAMS) {
+    const url = `${upstream}/${endpoint}${queryString}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    try {
+      const r = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json, text/plain, */*',
+        },
+      });
+      clearTimeout(timeout);
+      if (r.ok) {
+        const data = await r.json();
+        if (data && (data.status === 'ok' || data.data)) {
+          return data;
+        }
+      }
+    } catch (err) {
+      clearTimeout(timeout);
+      // Try next upstream in pool
+    }
   }
+  return null;
 }
 
 async function callWithTimeout(promise, ms = 3500) {
@@ -315,29 +331,46 @@ app.get('/api/random-movie', async (req, res) => {
   }
 });
 
-// Proxy movie API requests to avoid CORS and client-side network restrictions
+// Proxy movie API requests to avoid CORS and client-side network restrictions,
+// with automatic failover across official YTS upstreams (https://yts.gg/api)
 app.use('/api/v2', async (req, res) => {
-  try {
-    const targetUrl = `https://movies-api.accel.li/api/v2${req.url}`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+  let lastError = null;
 
-    const apiRes = await fetch(targetUrl, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-    });
-    clearTimeout(timeout);
+  for (const upstream of API_UPSTREAMS) {
+    try {
+      const targetUrl = `${upstream}${req.url}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 7000);
 
-    const data = await apiRes.text();
-    res.status(apiRes.status)
-      .set('Content-Type', apiRes.headers.get('content-type') || 'application/json')
-      .send(data);
-  } catch (err) {
-    console.error('API proxy error:', err.message);
-    res.status(502).json({ status: 'error', message: 'API request failed: ' + err.message });
+      const apiRes = await fetch(targetUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json, text/plain, */*',
+        },
+      });
+      clearTimeout(timeout);
+
+      // If response is OK or a valid not-found (404), return it directly
+      if (apiRes.ok || apiRes.status === 404) {
+        const data = await apiRes.text();
+        return res.status(apiRes.status)
+          .set('Content-Type', apiRes.headers.get('content-type') || 'application/json')
+          .send(data);
+      }
+
+      lastError = new Error(`Upstream ${upstream} returned status ${apiRes.status}`);
+    } catch (err) {
+      lastError = err;
+      // Try next upstream
+    }
   }
+
+  console.error('API proxy error across all upstreams:', lastError?.message);
+  res.status(502).json({
+    status: 'error',
+    message: 'API request failed: ' + (lastError?.message || 'All upstreams unavailable'),
+  });
 });
 
 // Serve static assets from root directory

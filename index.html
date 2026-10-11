@@ -189,6 +189,7 @@
   <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></symbol>
   <symbol id="i-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
   <symbol id="i-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></symbol>
 </svg>
 
   <header class="header" id="header">
@@ -247,6 +248,7 @@
       <a href="#" class="side-menu-item" id="sideSurpriseMe"><svg class="nav-ico" aria-hidden="true"><use href="#i-dice"/></svg> Surprise Me</a>
       <a href="#" class="side-menu-item" id="sideCompare"><svg class="nav-ico" aria-hidden="true"><use href="#i-scale"/></svg> Compare Movies (<span id="sideCompareBadge">0</span>)</a>
       <p class="side-menu-label">Info</p>
+      <a href="#" class="side-menu-item" data-modal="api"><svg class="nav-ico" aria-hidden="true"><use href="#i-code"/></svg> YTS API &amp; Endpoints</a>
       <a href="#" class="side-menu-item" data-modal="about">About Us</a>
       <a href="#" class="side-menu-item" data-modal="guides">Guides &amp; FAQ</a>
       <a href="#" class="side-menu-item" data-modal="contact">Contact</a>
@@ -618,6 +620,7 @@
           <button class="details-tab active" data-tab="torrents">↓ Download Torrents &amp; Magnet URIs <span class="tab-count" id="torrentCount">(0)</span></button>
           <button class="details-tab" data-tab="cast">👥 Cast &amp; Characters <span class="tab-count" id="castCount">(0)</span></button>
           <button class="details-tab" data-tab="shots">🖼 Screenshots <span class="tab-count" id="shotCount">(0)</span></button>
+          <button class="details-tab" data-tab="suggestions">🎬 Related Suggestions <span class="tab-count" id="suggestionCount">(0)</span></button>
         </div>
         <div class="tab-panel active" id="panelTorrents">
           <h2 class="sr-only">Torrents and magnet links</h2>
@@ -644,6 +647,7 @@
         </div>
         <div class="tab-panel" id="panelCast" hidden><h2 class="sr-only">Cast and characters</h2><div class="cast-grid" id="castGrid"></div></div>
         <div class="tab-panel" id="panelShots" hidden><h2 class="sr-only">Screenshots</h2><div class="shots-grid swipe-on-mobile" id="shotsGrid"></div></div>
+        <div class="tab-panel" id="panelSuggestions" hidden><h2 class="sr-only">Related movie suggestions</h2><div class="suggestions-grid" id="suggestionsGrid"></div></div>
         <aside class="ad-slot ad-slot-details" id="adDetails" aria-label="Advertisement">
           <div class="ad-label">Ad</div>
           <div class="ad-container" data-ad-pos="details"></div>
@@ -687,6 +691,7 @@
       <div class="footer-col">
         <h3 class="footer-heading">Company</h3>
         <a href="#" data-modal="about">About Us</a>
+        <a href="#" data-modal="api">YTS API &amp; Endpoints</a>
         <a href="#" data-modal="contact">Contact</a>
         <a href="#" data-modal="guides">Guides &amp; FAQ</a>
       </div>
